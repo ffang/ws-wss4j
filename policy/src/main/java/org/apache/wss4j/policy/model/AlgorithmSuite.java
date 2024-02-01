@@ -27,6 +27,9 @@ import org.apache.wss4j.policy.SPConstants;
 import javax.xml.namespace.QName;
 import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamWriter;
+
+import java.security.AccessController;
+import java.security.PrivilegedAction;
 import java.util.*;
 
 public class AlgorithmSuite extends AbstractSecurityAssertion implements PolicyContainingAssertion {
@@ -36,14 +39,23 @@ public class AlgorithmSuite extends AbstractSecurityAssertion implements PolicyC
     private static final int MAX_SKL = 256;
     private static final int MIN_AKL = 1024;
     private static final int MAX_AKL = 4096;
-
+    private static final String FIPS_ENABLED = "fips.enabled";
+    
     static {
+        boolean isFIPSEnabled = Boolean.parseBoolean(AccessController.doPrivileged(new PrivilegedAction<String>() {
+            public String run() {
+                return System.getProperty(FIPS_ENABLED);
+            }
+        }));
         ALGORITHM_SUITE_TYPES.put("Basic256", new AlgorithmSuiteType(
                 "Basic256",
                 SPConstants.SHA1,
-                SPConstants.AES256,
+                isFIPSEnabled 
+                    ? "http://www.w3.org/2009/xmlenc11#aes256-gcm"
+                    : SPConstants.AES256,
                 SPConstants.KW_AES256,
-                SPConstants.KW_RSA_OAEP,
+                isFIPSEnabled
+                    ? SPConstants.KW_RSA15 : SPConstants.KW_RSA_OAEP,
                 SPConstants.P_SHA1_L256,
                 SPConstants.P_SHA1_L192,
                 256, 192, 256,
@@ -51,9 +63,12 @@ public class AlgorithmSuite extends AbstractSecurityAssertion implements PolicyC
         ALGORITHM_SUITE_TYPES.put("Basic192", new AlgorithmSuiteType(
                 "Basic192",
                 SPConstants.SHA1,
-                SPConstants.AES192,
+                isFIPSEnabled 
+                    ? "http://www.w3.org/2009/xmlenc11#aes192-gcm"
+                    : SPConstants.AES192,
                 SPConstants.KW_AES192,
-                SPConstants.KW_RSA_OAEP,
+                isFIPSEnabled
+                    ? SPConstants.KW_RSA15 : SPConstants.KW_RSA_OAEP,
                 SPConstants.P_SHA1_L192,
                 SPConstants.P_SHA1_L192,
                 192, 192, 192,
@@ -61,9 +76,12 @@ public class AlgorithmSuite extends AbstractSecurityAssertion implements PolicyC
         ALGORITHM_SUITE_TYPES.put("Basic128", new AlgorithmSuiteType(
                 "Basic128",
                 SPConstants.SHA1,
-                SPConstants.AES128,
+                isFIPSEnabled 
+                    ? "http://www.w3.org/2009/xmlenc11#aes128-gcm"
+                    : SPConstants.AES128,
                 SPConstants.KW_AES128,
-                SPConstants.KW_RSA_OAEP,
+                isFIPSEnabled
+                    ? SPConstants.KW_RSA15 : SPConstants.KW_RSA_OAEP,
                 SPConstants.P_SHA1_L128,
                 SPConstants.P_SHA1_L128,
                 128, 128, 128,
@@ -71,9 +89,12 @@ public class AlgorithmSuite extends AbstractSecurityAssertion implements PolicyC
         ALGORITHM_SUITE_TYPES.put("TripleDes", new AlgorithmSuiteType(
                 "TripleDes",
                 SPConstants.SHA1,
-                SPConstants.TRIPLE_DES,
+                isFIPSEnabled 
+                    ? "http://www.w3.org/2009/xmlenc11#aes192-gcm"
+                    : SPConstants.TRIPLE_DES,
                 SPConstants.KW_TRIPLE_DES,
-                SPConstants.KW_RSA_OAEP,
+                isFIPSEnabled
+                    ? SPConstants.KW_RSA15 : SPConstants.KW_RSA_OAEP,
                 SPConstants.P_SHA1_L192,
                 SPConstants.P_SHA1_L192,
                 192, 192, 192,
@@ -81,7 +102,9 @@ public class AlgorithmSuite extends AbstractSecurityAssertion implements PolicyC
         ALGORITHM_SUITE_TYPES.put("Basic256Rsa15", new AlgorithmSuiteType(
                 "Basic256Rsa15",
                 SPConstants.SHA1,
-                SPConstants.AES256,
+                isFIPSEnabled 
+                    ? "http://www.w3.org/2009/xmlenc11#aes256-gcm"
+                    : SPConstants.AES256,
                 SPConstants.KW_AES256,
                 SPConstants.KW_RSA15,
                 SPConstants.P_SHA1_L256,
@@ -91,7 +114,9 @@ public class AlgorithmSuite extends AbstractSecurityAssertion implements PolicyC
         ALGORITHM_SUITE_TYPES.put("Basic192Rsa15", new AlgorithmSuiteType(
                 "Basic192Rsa15",
                 SPConstants.SHA1,
-                SPConstants.AES192,
+                isFIPSEnabled  
+                    ? "http://www.w3.org/2009/xmlenc11#aes192-gcm"
+                    : SPConstants.AES192,
                 SPConstants.KW_AES192,
                 SPConstants.KW_RSA15,
                 SPConstants.P_SHA1_L192,
@@ -101,7 +126,9 @@ public class AlgorithmSuite extends AbstractSecurityAssertion implements PolicyC
         ALGORITHM_SUITE_TYPES.put("Basic128Rsa15", new AlgorithmSuiteType(
                 "Basic128Rsa15",
                 SPConstants.SHA1,
-                SPConstants.AES128,
+                isFIPSEnabled
+                    ? "http://www.w3.org/2009/xmlenc11#aes128-gcm"
+                    : SPConstants.AES128,
                 SPConstants.KW_AES128,
                 SPConstants.KW_RSA15,
                 SPConstants.P_SHA1_L128,
@@ -111,7 +138,9 @@ public class AlgorithmSuite extends AbstractSecurityAssertion implements PolicyC
         ALGORITHM_SUITE_TYPES.put("TripleDesRsa15", new AlgorithmSuiteType(
                 "TripleDesRsa15",
                 SPConstants.SHA1,
-                SPConstants.TRIPLE_DES,
+                isFIPSEnabled 
+                    ? "http://www.w3.org/2009/xmlenc11#aes192-gcm"
+                    : SPConstants.TRIPLE_DES,
                 SPConstants.KW_TRIPLE_DES,
                 SPConstants.KW_RSA15,
                 SPConstants.P_SHA1_L192,
@@ -121,9 +150,12 @@ public class AlgorithmSuite extends AbstractSecurityAssertion implements PolicyC
         ALGORITHM_SUITE_TYPES.put("Basic256Sha256", new AlgorithmSuiteType(
                 "Basic256Sha256",
                 SPConstants.SHA256,
-                SPConstants.AES256,
+                isFIPSEnabled 
+                    ? "http://www.w3.org/2009/xmlenc11#aes256-gcm"
+                    : SPConstants.AES256,
                 SPConstants.KW_AES256,
-                SPConstants.KW_RSA_OAEP,
+                isFIPSEnabled
+                    ? SPConstants.KW_RSA15 : SPConstants.KW_RSA_OAEP,
                 SPConstants.P_SHA1_L256,
                 SPConstants.P_SHA1_L192,
                 256, 192, 256,
@@ -131,9 +163,12 @@ public class AlgorithmSuite extends AbstractSecurityAssertion implements PolicyC
         ALGORITHM_SUITE_TYPES.put("Basic192Sha256", new AlgorithmSuiteType(
                 "Basic192Sha256",
                 SPConstants.SHA256,
-                SPConstants.AES192,
+                isFIPSEnabled
+                    ? "http://www.w3.org/2009/xmlenc11#aes192-gcm"
+                    : SPConstants.AES192,
                 SPConstants.KW_AES192,
-                SPConstants.KW_RSA_OAEP,
+                isFIPSEnabled
+                    ? SPConstants.KW_RSA15 : SPConstants.KW_RSA_OAEP,
                 SPConstants.P_SHA1_L192,
                 SPConstants.P_SHA1_L192,
                 192, 192, 192,
@@ -141,9 +176,12 @@ public class AlgorithmSuite extends AbstractSecurityAssertion implements PolicyC
         ALGORITHM_SUITE_TYPES.put("Basic128Sha256", new AlgorithmSuiteType(
                 "Basic128Sha256",
                 SPConstants.SHA256,
-                SPConstants.AES128,
+                isFIPSEnabled
+                    ? "http://www.w3.org/2009/xmlenc11#aes128-gcm"
+                    : SPConstants.AES128,
                 SPConstants.KW_AES128,
-                SPConstants.KW_RSA_OAEP,
+                isFIPSEnabled
+                    ? SPConstants.KW_RSA15 : SPConstants.KW_RSA_OAEP,
                 SPConstants.P_SHA1_L128,
                 SPConstants.P_SHA1_L128,
                 128, 128, 128,
@@ -151,9 +189,12 @@ public class AlgorithmSuite extends AbstractSecurityAssertion implements PolicyC
         ALGORITHM_SUITE_TYPES.put("TripleDesSha256", new AlgorithmSuiteType(
                 "TripleDesSha256",
                 SPConstants.SHA256,
-                SPConstants.TRIPLE_DES,
+                isFIPSEnabled
+                    ? "http://www.w3.org/2009/xmlenc11#aes192-gcm"
+                    : SPConstants.TRIPLE_DES,
                 SPConstants.KW_TRIPLE_DES,
-                SPConstants.KW_RSA_OAEP,
+                isFIPSEnabled
+                    ? SPConstants.KW_RSA15 : SPConstants.KW_RSA_OAEP,
                 SPConstants.P_SHA1_L192,
                 SPConstants.P_SHA1_L192,
                 192, 192, 192,
@@ -161,7 +202,9 @@ public class AlgorithmSuite extends AbstractSecurityAssertion implements PolicyC
         ALGORITHM_SUITE_TYPES.put("Basic256Sha256Rsa15", new AlgorithmSuiteType(
                 "Basic256Sha256Rsa15",
                 SPConstants.SHA256,
-                SPConstants.AES256,
+                isFIPSEnabled
+                    ? "http://www.w3.org/2009/xmlenc11#aes256-gcm"
+                    : SPConstants.AES256,
                 SPConstants.KW_AES256,
                 SPConstants.KW_RSA15,
                 SPConstants.P_SHA1_L256,
@@ -171,7 +214,9 @@ public class AlgorithmSuite extends AbstractSecurityAssertion implements PolicyC
         ALGORITHM_SUITE_TYPES.put("Basic192Sha256Rsa15", new AlgorithmSuiteType(
                 "Basic192Sha256Rsa15",
                 SPConstants.SHA256,
-                SPConstants.AES192,
+                isFIPSEnabled
+                    ? "http://www.w3.org/2009/xmlenc11#aes192-gcm"
+                    : SPConstants.AES192,
                 SPConstants.KW_AES192,
                 SPConstants.KW_RSA15,
                 SPConstants.P_SHA1_L192,
@@ -181,7 +226,9 @@ public class AlgorithmSuite extends AbstractSecurityAssertion implements PolicyC
         ALGORITHM_SUITE_TYPES.put("Basic128Sha256Rsa15", new AlgorithmSuiteType(
                 "Basic128Sha256Rsa15",
                 SPConstants.SHA256,
-                SPConstants.AES128,
+                isFIPSEnabled
+                    ? "http://www.w3.org/2009/xmlenc11#aes128-gcm"
+                    : SPConstants.AES128,
                 SPConstants.KW_AES128,
                 SPConstants.KW_RSA15,
                 SPConstants.P_SHA1_L128,
@@ -191,7 +238,9 @@ public class AlgorithmSuite extends AbstractSecurityAssertion implements PolicyC
         ALGORITHM_SUITE_TYPES.put("TripleDesSha256Rsa15", new AlgorithmSuiteType(
                 "TripleDesSha256Rsa15",
                 SPConstants.SHA256,
-                SPConstants.TRIPLE_DES,
+                isFIPSEnabled
+                    ? "http://www.w3.org/2009/xmlenc11#aes192-gcm"
+                    : SPConstants.TRIPLE_DES,
                 SPConstants.KW_TRIPLE_DES,
                 SPConstants.KW_RSA15,
                 SPConstants.P_SHA1_L192,
