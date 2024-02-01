@@ -83,7 +83,7 @@ public class RequestData {
     private AlgorithmSuite algorithmSuite;
     private AlgorithmSuite samlAlgorithmSuite;
     private boolean disableBSPEnforcement;
-    private boolean allowRSA15KeyTransportAlgorithm;
+    private boolean allowRSA15KeyTransportAlgorithm = true;
     private boolean addUsernameTokenNonce;
     private boolean addUsernameTokenCreated;
     private Certificate[] tlsCerts;

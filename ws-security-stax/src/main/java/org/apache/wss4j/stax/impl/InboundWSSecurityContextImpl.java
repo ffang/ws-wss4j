@@ -59,7 +59,7 @@ public class InboundWSSecurityContextImpl extends InboundSecurityContextImpl imp
     private final Deque<SecurityEvent> securityEventQueue = new ArrayDeque<>();
     private boolean operationSecurityEventOccured = false;
     private boolean messageEncryptionTokenOccured = false;
-    private boolean allowRSA15KeyTransportAlgorithm = false;
+    private boolean allowRSA15KeyTransportAlgorithm = true;
     private boolean disableBSPEnforcement;
     private boolean soap12;
 

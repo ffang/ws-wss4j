@@ -1410,7 +1410,7 @@ public abstract class WSHandler {
         boolean allowRsa15 =
             decodeBooleanConfigValue(
                 reqData.getMsgContext(), WSHandlerConstants.ALLOW_RSA15_KEY_TRANSPORT_ALGORITHM,
-                false
+                true
             );
         reqData.setAllowRSA15KeyTransportAlgorithm(allowRsa15);
     }

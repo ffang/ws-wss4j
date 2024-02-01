@@ -219,7 +219,7 @@ public class AlgorithmSuite extends AbstractSecurityAssertion implements PolicyC
         private String ns;
         private String encryptionDigest;
         private String symmetricSignature = SPConstants.HMAC_SHA1;
-        private String asymmetricSignature = SPConstants.RSA_SHA1;
+        private String asymmetricSignature = SPConstants.RSA_SHA256;
 
         public AlgorithmSuiteType(String name, String digest, String encryption, String symmetricKeyWrap, //NOPMD
                                   String asymmetricKeyWrap, String encryptionKeyDerivation,
@@ -228,7 +228,7 @@ public class AlgorithmSuite extends AbstractSecurityAssertion implements PolicyC
                                   int maximumSymmetricKeyLength, int minimumAsymmetricKeyLength,
                                   int maximumAsymmetricKeyLength) {
             this(name, digest, encryption, symmetricKeyWrap, asymmetricKeyWrap, encryptionKeyDerivation,
-                 signatureKeyDerivation, SPConstants.HMAC_SHA1, SPConstants.RSA_SHA1, encryptionDerivedKeyLength,
+                 signatureKeyDerivation, SPConstants.HMAC_SHA1, SPConstants.RSA_SHA256, encryptionDerivedKeyLength,
                  signatureDerivedKeyLength, minimumSymmetricKeyLength, maximumSymmetricKeyLength,
                  minimumAsymmetricKeyLength, maximumAsymmetricKeyLength);
         }
