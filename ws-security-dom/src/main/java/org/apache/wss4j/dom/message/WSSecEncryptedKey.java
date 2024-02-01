@@ -75,7 +75,7 @@ public class WSSecEncryptedKey extends WSSecBase {
     /**
      * Algorithm used to encrypt the ephemeral key
      */
-    private String keyEncAlgo = WSConstants.KEYTRANSPORT_RSAOAEP;
+    private String keyEncAlgo = WSConstants.KEYTRANSPORT_RSA15;
 
     /**
      * Key agreement method algorithm used to encrypt the transport key.

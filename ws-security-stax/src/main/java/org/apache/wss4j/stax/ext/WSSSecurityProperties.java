@@ -82,7 +82,7 @@ public class WSSSecurityProperties extends XMLSecurityProperties {
      */
     private boolean handleCustomPasswordTypes = false;
     private boolean allowUsernameTokenNoPassword = false;
-    private boolean allowRSA15KeyTransportAlgorithm = false;
+    private boolean allowRSA15KeyTransportAlgorithm = true;
     private boolean useDerivedKeyForMAC = true;
     private WSSConstants.UsernameTokenPasswordType usernameTokenPasswordType;
     private String tokenUser;

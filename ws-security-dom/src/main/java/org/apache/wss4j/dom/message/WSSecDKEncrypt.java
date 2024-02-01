@@ -44,7 +44,7 @@ import org.w3c.dom.Node;
  */
 public class WSSecDKEncrypt extends WSSecDerivedKeyBase {
 
-    private String symEncAlgo = WSConstants.AES_128;
+    private String symEncAlgo = WSConstants.AES_256_GCM;
     private int derivedKeyLength = -1;
 
     private List<Element> attachmentEncryptedDataElements;

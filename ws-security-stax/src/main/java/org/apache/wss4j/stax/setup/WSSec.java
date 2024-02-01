@@ -31,6 +31,7 @@ import javax.xml.transform.stream.StreamSource;
 import javax.xml.validation.Schema;
 import javax.xml.validation.SchemaFactory;
 
+import org.apache.wss4j.common.WSS4JConstants;
 import org.apache.wss4j.common.crypto.WSProviderConfig;
 import org.apache.wss4j.common.ext.WSSecurityException;
 import org.apache.wss4j.stax.ext.WSSConfigurationException;
@@ -367,13 +368,12 @@ public class WSSec {
             throw new WSSConfigurationException(WSSConfigurationException.ErrorCode.FAILURE, "noEncryptionUser");
         }
         if (securityProperties.getEncryptionSymAlgorithm() == null) {
-            securityProperties.setEncryptionSymAlgorithm(WSSConstants.NS_XENC_AES256);
+            securityProperties.setEncryptionSymAlgorithm(WSS4JConstants.AES_256_GCM);
         }
         if (securityProperties.getEncryptionKeyTransportAlgorithm() == null) {
             //@see http://www.w3.org/TR/2002/REC-xmlenc-core-20021210/Overview.html#rsa-1_5 :
-            //"RSA-OAEP is RECOMMENDED for the transport of AES keys"
-            //@see http://www.w3.org/TR/2002/REC-xmlenc-core-20021210/Overview.html#rsa-oaep-mgf1p
-            securityProperties.setEncryptionKeyTransportAlgorithm(WSSConstants.NS_XENC_RSAOAEPMGF1P);
+            
+            securityProperties.setEncryptionKeyTransportAlgorithm(WSSConstants.NS_XENC_RSA15);
         }
         if (securityProperties.getEncryptionKeyIdentifier() == null) {
             securityProperties.setEncryptionKeyIdentifier(WSSecurityTokenConstants.KeyIdentifier_IssuerSerial);

@@ -441,7 +441,7 @@ public final class ConfigurationConverter {
         properties.setStrictTimestampCheck(timestampStrict);
 
         boolean allowRSA15 =
-            decodeBooleanConfigValue(ConfigurationConstants.ALLOW_RSA15_KEY_TRANSPORT_ALGORITHM, false, config);
+            decodeBooleanConfigValue(ConfigurationConstants.ALLOW_RSA15_KEY_TRANSPORT_ALGORITHM, true, config);
         properties.setAllowRSA15KeyTransportAlgorithm(allowRSA15);
 
         boolean validateSamlSubjectConf =

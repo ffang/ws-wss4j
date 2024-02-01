@@ -80,7 +80,7 @@ public class WSSecEncrypt extends WSSecEncryptedKey {
     /**
      * Algorithm to be used with the ephemeral key
      */
-    private String symEncAlgo = WSConstants.AES_128;
+    private String symEncAlgo = WSConstants.AES_256_GCM;
 
     public WSSecEncrypt(WSSecHeader securityHeader) {
         super(securityHeader);
