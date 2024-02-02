@@ -683,7 +683,8 @@ public class EncryptedKeyProcessor implements Processor {
             && !WSConstants.AES_128.equals(symEncAlgo)
             && !WSConstants.AES_128_GCM.equals(symEncAlgo)
             && !WSConstants.AES_256.equals(symEncAlgo)
-            && !WSConstants.AES_256_GCM.equals(symEncAlgo)) {
+            && !WSConstants.AES_256_GCM.equals(symEncAlgo)
+            && !WSConstants.AES_192_GCM.equals(symEncAlgo)) {
             data.getBSPEnforcer().handleBSPRule(BSPRule.R5620);
         }
 
