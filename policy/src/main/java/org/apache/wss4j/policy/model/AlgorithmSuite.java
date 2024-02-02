@@ -131,7 +131,7 @@ public class AlgorithmSuite extends AbstractSecurityAssertion implements PolicyC
         ALGORITHM_SUITE_TYPES.put("Basic192Sha256", new AlgorithmSuiteType(
                 "Basic192Sha256",
                 SPConstants.SHA256,
-                "http://www.w3.org/2009/xmlenc11#aes256-gcm",
+                "http://www.w3.org/2009/xmlenc11#aes192-gcm",
                 SPConstants.KW_AES192,
                 SPConstants.KW_RSA15,
                 SPConstants.P_SHA1_L192,
