@@ -61,7 +61,7 @@ public class WSSecDKSign extends WSSecDerivedKeyBase {
         org.slf4j.LoggerFactory.getLogger(WSSecDKSign.class);
 
     private String sigAlgo = WSConstants.HMAC_SHA1;
-    private String digestAlgo = WSConstants.SHA1;
+    private String digestAlgo = WSConstants.SHA256;
     private String canonAlgo = WSConstants.C14N_EXCL_OMIT_COMMENTS;
     private byte[] signatureValue;
 
