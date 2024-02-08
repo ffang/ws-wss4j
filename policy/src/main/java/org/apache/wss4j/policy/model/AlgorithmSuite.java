@@ -40,7 +40,7 @@ public class AlgorithmSuite extends AbstractSecurityAssertion implements PolicyC
     static {
         ALGORITHM_SUITE_TYPES.put("Basic256", new AlgorithmSuiteType(
                 "Basic256",
-                SPConstants.SHA256,
+                SPConstants.SHA1,
                 "http://www.w3.org/2009/xmlenc11#aes256-gcm",
                 SPConstants.KW_AES256,
                 SPConstants.KW_RSA15,
@@ -50,7 +50,7 @@ public class AlgorithmSuite extends AbstractSecurityAssertion implements PolicyC
                 MAX_SKL, MIN_AKL, MAX_AKL));
         ALGORITHM_SUITE_TYPES.put("Basic192", new AlgorithmSuiteType(
                 "Basic192",
-                SPConstants.SHA256,
+                SPConstants.SHA1,
                 "http://www.w3.org/2009/xmlenc11#aes192-gcm",
                 SPConstants.KW_AES192,
                 SPConstants.KW_RSA15,
@@ -60,7 +60,7 @@ public class AlgorithmSuite extends AbstractSecurityAssertion implements PolicyC
                 MAX_SKL, MIN_AKL, MAX_AKL));
         ALGORITHM_SUITE_TYPES.put("Basic128", new AlgorithmSuiteType(
                 "Basic128",
-                SPConstants.SHA256,
+                SPConstants.SHA1,
                 "http://www.w3.org/2009/xmlenc11#aes128-gcm",
                 SPConstants.KW_AES128,
                 SPConstants.KW_RSA15,
@@ -70,7 +70,7 @@ public class AlgorithmSuite extends AbstractSecurityAssertion implements PolicyC
                 MAX_SKL, MIN_AKL, MAX_AKL));
         ALGORITHM_SUITE_TYPES.put("TripleDes", new AlgorithmSuiteType(
                 "TripleDes",
-                SPConstants.SHA256,
+                SPConstants.SHA1,
                 "http://www.w3.org/2009/xmlenc11#aes192-gcm",
                 SPConstants.KW_TRIPLE_DES,
                 SPConstants.KW_RSA15,
@@ -80,7 +80,7 @@ public class AlgorithmSuite extends AbstractSecurityAssertion implements PolicyC
                 MAX_SKL, MIN_AKL, MAX_AKL));
         ALGORITHM_SUITE_TYPES.put("Basic256Rsa15", new AlgorithmSuiteType(
                 "Basic256Rsa15",
-                SPConstants.SHA256,
+                SPConstants.SHA1,
                 "http://www.w3.org/2009/xmlenc11#aes256-gcm",
                 SPConstants.KW_AES256,
                 SPConstants.KW_RSA15,
@@ -90,7 +90,7 @@ public class AlgorithmSuite extends AbstractSecurityAssertion implements PolicyC
                 MAX_SKL, MIN_AKL, MAX_AKL));
         ALGORITHM_SUITE_TYPES.put("Basic192Rsa15", new AlgorithmSuiteType(
                 "Basic192Rsa15",
-                SPConstants.SHA256,
+                SPConstants.SHA1,
                 "http://www.w3.org/2009/xmlenc11#aes192-gcm",
                 SPConstants.KW_AES192,
                 SPConstants.KW_RSA15,
@@ -100,7 +100,7 @@ public class AlgorithmSuite extends AbstractSecurityAssertion implements PolicyC
                 MAX_SKL, MIN_AKL, MAX_AKL));
         ALGORITHM_SUITE_TYPES.put("Basic128Rsa15", new AlgorithmSuiteType(
                 "Basic128Rsa15",
-                SPConstants.SHA256,
+                SPConstants.SHA1,
                 "http://www.w3.org/2009/xmlenc11#aes128-gcm",
                 SPConstants.KW_AES128,
                 SPConstants.KW_RSA15,
@@ -110,7 +110,7 @@ public class AlgorithmSuite extends AbstractSecurityAssertion implements PolicyC
                 MAX_SKL, MIN_AKL, MAX_AKL));
         ALGORITHM_SUITE_TYPES.put("TripleDesRsa15", new AlgorithmSuiteType(
                 "TripleDesRsa15",
-                SPConstants.SHA256,
+                SPConstants.SHA1,
                 "http://www.w3.org/2009/xmlenc11#aes192-gcm",
                 SPConstants.KW_TRIPLE_DES,
                 SPConstants.KW_RSA15,
@@ -219,7 +219,7 @@ public class AlgorithmSuite extends AbstractSecurityAssertion implements PolicyC
         private String ns;
         private String encryptionDigest;
         private String symmetricSignature = SPConstants.HMAC_SHA1;
-        private String asymmetricSignature = SPConstants.RSA_SHA256;
+        private String asymmetricSignature = SPConstants.RSA_SHA1;
 
         public AlgorithmSuiteType(String name, String digest, String encryption, String symmetricKeyWrap, //NOPMD
                                   String asymmetricKeyWrap, String encryptionKeyDerivation,
@@ -228,7 +228,7 @@ public class AlgorithmSuite extends AbstractSecurityAssertion implements PolicyC
                                   int maximumSymmetricKeyLength, int minimumAsymmetricKeyLength,
                                   int maximumAsymmetricKeyLength) {
             this(name, digest, encryption, symmetricKeyWrap, asymmetricKeyWrap, encryptionKeyDerivation,
-                 signatureKeyDerivation, SPConstants.HMAC_SHA1, SPConstants.RSA_SHA256, encryptionDerivedKeyLength,
+                 signatureKeyDerivation, SPConstants.HMAC_SHA1, SPConstants.RSA_SHA1, encryptionDerivedKeyLength,
                  signatureDerivedKeyLength, minimumSymmetricKeyLength, maximumSymmetricKeyLength,
                  minimumAsymmetricKeyLength, maximumAsymmetricKeyLength);
         }

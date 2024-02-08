@@ -103,7 +103,7 @@ public class WSSecSignature extends WSSecSignatureBase {
     private String customTokenId;
     private String encrKeySha1value;
     private Crypto crypto;
-    private String digestAlgo = WSConstants.SHA256;
+    private String digestAlgo = WSConstants.SHA1;
     private X509Certificate useThisCert;
     private boolean useCustomSecRef;
     private boolean bstAddedToSecurityHeader;
@@ -886,7 +886,7 @@ public class WSSecSignature extends WSSecSignatureBase {
                 if (pubKeyAlgo.equalsIgnoreCase("DSA")) {
                     sigAlgo = WSConstants.DSA;
                 } else if (pubKeyAlgo.equalsIgnoreCase("RSA")) {
-                    sigAlgo = WSConstants.RSA_SHA256;
+                    sigAlgo = WSConstants.RSA;
                 } else if (pubKeyAlgo.equalsIgnoreCase("EC")) {
                     sigAlgo = WSConstants.ECDSA_SHA256;
                 } else if (pubKeyAlgo.equalsIgnoreCase("Ed25519")) {
