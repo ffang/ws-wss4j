@@ -36,7 +36,7 @@ import org.jasypt.salt.RandomSaltGenerator;
  */
 public class JasyptPasswordEncryptor implements PasswordEncryptor {
 
-    public static final String DEFAULT_ALGORITHM = "PBEWithMD5AndTripleDES";
+    public static final String DEFAULT_ALGORITHM = "PBEWithHmacSHA384AndAES_256";
 
     private static final org.slf4j.Logger LOG =
         org.slf4j.LoggerFactory.getLogger(JasyptPasswordEncryptor.class);
