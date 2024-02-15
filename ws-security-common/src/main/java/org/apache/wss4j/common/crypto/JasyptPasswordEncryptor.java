@@ -62,6 +62,7 @@ public class JasyptPasswordEncryptor implements PasswordEncryptor {
     public JasyptPasswordEncryptor(CallbackHandler callbackHandler, String algorithm) {
         passwordEncryptor = new StandardPBEStringEncryptor();
         passwordEncryptor.setAlgorithm(algorithm);
+        passwordEncryptor.setSaltGenerator(new RandomSaltGenerator("PKCS11"));
         this.callbackHandler = callbackHandler;
     }
 
