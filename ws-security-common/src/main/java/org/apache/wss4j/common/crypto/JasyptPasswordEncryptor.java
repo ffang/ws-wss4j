@@ -27,6 +27,7 @@ import javax.security.auth.callback.UnsupportedCallbackException;
 
 import org.apache.wss4j.common.ext.WSPasswordCallback;
 import org.jasypt.encryption.pbe.StandardPBEStringEncryptor;
+import org.jasypt.salt.RandomSaltGenerator;
 
 
 /**
@@ -51,6 +52,7 @@ public class JasyptPasswordEncryptor implements PasswordEncryptor {
         passwordEncryptor = new StandardPBEStringEncryptor();
         passwordEncryptor.setPassword(password);
         passwordEncryptor.setAlgorithm(algorithm);
+        passwordEncryptor.setSaltGenerator(new RandomSaltGenerator("PKCS11"));
     }
 
     public JasyptPasswordEncryptor(CallbackHandler callbackHandler) {
