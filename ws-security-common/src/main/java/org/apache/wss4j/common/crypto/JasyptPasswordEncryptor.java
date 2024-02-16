@@ -26,6 +26,7 @@ import javax.security.auth.callback.CallbackHandler;
 import javax.security.auth.callback.UnsupportedCallbackException;
 
 import org.apache.wss4j.common.ext.WSPasswordCallback;
+import org.apache.wss4j.common.util.FIPSUtils;
 import org.jasypt.encryption.pbe.StandardPBEStringEncryptor;
 import org.jasypt.salt.RandomSaltGenerator;
 
@@ -36,7 +37,9 @@ import org.jasypt.salt.RandomSaltGenerator;
  */
 public class JasyptPasswordEncryptor implements PasswordEncryptor {
 
-    public static final String DEFAULT_ALGORITHM = "PBEWithHmacSHA384AndAES_256";
+    public static final String DEFAULT_ALGORITHM = 
+        FIPSUtils.isFIPSEnabled() 
+            ? "PBEWithHmacSHA384AndAES_256" : "PBEWithMD5AndTripleDES";
 
     private static final org.slf4j.Logger LOG =
         org.slf4j.LoggerFactory.getLogger(JasyptPasswordEncryptor.class);
@@ -52,7 +55,9 @@ public class JasyptPasswordEncryptor implements PasswordEncryptor {
         passwordEncryptor = new StandardPBEStringEncryptor();
         passwordEncryptor.setPassword(password);
         passwordEncryptor.setAlgorithm(algorithm);
-        passwordEncryptor.setSaltGenerator(new RandomSaltGenerator("PKCS11"));
+        if (FIPSUtils.isFIPSEnabled()) {
+            passwordEncryptor.setSaltGenerator(new RandomSaltGenerator("PKCS11"));
+        }
     }
 
     public JasyptPasswordEncryptor(CallbackHandler callbackHandler) {
@@ -62,7 +67,9 @@ public class JasyptPasswordEncryptor implements PasswordEncryptor {
     public JasyptPasswordEncryptor(CallbackHandler callbackHandler, String algorithm) {
         passwordEncryptor = new StandardPBEStringEncryptor();
         passwordEncryptor.setAlgorithm(algorithm);
-        passwordEncryptor.setSaltGenerator(new RandomSaltGenerator("PKCS11"));
+        if (FIPSUtils.isFIPSEnabled()) {
+            passwordEncryptor.setSaltGenerator(new RandomSaltGenerator("PKCS11"));
+        }
         this.callbackHandler = callbackHandler;
     }
 

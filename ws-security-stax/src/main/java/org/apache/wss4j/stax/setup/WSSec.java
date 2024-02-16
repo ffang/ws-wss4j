@@ -34,6 +34,7 @@ import javax.xml.validation.SchemaFactory;
 import org.apache.wss4j.common.WSS4JConstants;
 import org.apache.wss4j.common.crypto.WSProviderConfig;
 import org.apache.wss4j.common.ext.WSSecurityException;
+import org.apache.wss4j.common.util.FIPSUtils;
 import org.apache.wss4j.stax.ext.WSSConfigurationException;
 import org.apache.wss4j.stax.ext.WSSConstants;
 import org.apache.wss4j.stax.ext.WSSSecurityProperties;
@@ -368,12 +369,14 @@ public class WSSec {
             throw new WSSConfigurationException(WSSConfigurationException.ErrorCode.FAILURE, "noEncryptionUser");
         }
         if (securityProperties.getEncryptionSymAlgorithm() == null) {
-            securityProperties.setEncryptionSymAlgorithm(WSS4JConstants.AES_256_GCM);
+            securityProperties.setEncryptionSymAlgorithm(FIPSUtils.isFIPSEnabled()
+                ? WSS4JConstants.AES_256_GCM : WSSConstants.NS_XENC_AES256);
         }
         if (securityProperties.getEncryptionKeyTransportAlgorithm() == null) {
             //@see http://www.w3.org/TR/2002/REC-xmlenc-core-20021210/Overview.html#rsa-1_5 :
             
-            securityProperties.setEncryptionKeyTransportAlgorithm(WSSConstants.NS_XENC_RSA15);
+            securityProperties.setEncryptionKeyTransportAlgorithm(FIPSUtils.isFIPSEnabled()
+                ? WSSConstants.NS_XENC_RSA15 : WSSConstants.NS_XENC_RSAOAEPMGF1P);
         }
         if (securityProperties.getEncryptionKeyIdentifier() == null) {
             securityProperties.setEncryptionKeyIdentifier(WSSecurityTokenConstants.KeyIdentifier_IssuerSerial);
