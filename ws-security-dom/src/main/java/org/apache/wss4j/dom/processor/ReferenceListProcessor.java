@@ -236,8 +236,7 @@ public class ReferenceListProcessor implements Processor {
             && !WSConstants.AES_128.equals(encAlgo)
             && !WSConstants.AES_128_GCM.equals(encAlgo)
             && !WSConstants.AES_256.equals(encAlgo)
-            && !WSConstants.AES_256_GCM.equals(encAlgo)
-            && !WSConstants.AES_192_GCM.equals(encAlgo)) {
+            && !WSConstants.AES_256_GCM.equals(encAlgo)) {
             bspEnforcer.handleBSPRule(BSPRule.R5620);
         }
     }
