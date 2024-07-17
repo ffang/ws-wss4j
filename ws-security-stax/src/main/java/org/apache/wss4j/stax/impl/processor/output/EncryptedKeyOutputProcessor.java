@@ -24,6 +24,7 @@ import java.security.InvalidKeyException;
 import java.security.Key;
 import java.security.NoSuchAlgorithmException;
 import java.security.PublicKey;
+import java.security.Security;
 import java.security.cert.X509Certificate;
 import java.security.spec.AlgorithmParameterSpec;
 import java.security.spec.MGF1ParameterSpec;
@@ -42,10 +43,12 @@ import javax.xml.stream.XMLStreamException;
 
 import org.apache.wss4j.common.ext.WSPasswordCallback;
 import org.apache.wss4j.common.ext.WSSecurityException;
+import org.apache.wss4j.common.util.FIPSUtils;
 import org.apache.wss4j.stax.ext.WSSConstants;
 import org.apache.wss4j.stax.ext.WSSSecurityProperties;
 import org.apache.wss4j.stax.securityToken.WSSecurityTokenConstants;
 import org.apache.wss4j.stax.utils.WSSUtils;
+import org.apache.xml.security.encryption.XMLCipher;
 import org.apache.xml.security.exceptions.XMLSecurityException;
 import org.apache.xml.security.stax.config.JCEAlgorithmMapper;
 import org.apache.xml.security.stax.ext.AbstractOutputProcessor;
@@ -58,6 +61,7 @@ import org.apache.xml.security.stax.impl.util.IDGenerator;
 import org.apache.xml.security.stax.securityToken.OutboundSecurityToken;
 import org.apache.xml.security.stax.securityToken.SecurityTokenProvider;
 import org.apache.xml.security.utils.XMLUtils;
+import org.bouncycastle.jcajce.provider.BouncyCastleFipsProvider;
 
 public class EncryptedKeyOutputProcessor extends AbstractOutputProcessor {
 
@@ -277,7 +281,25 @@ public class EncryptedKeyOutputProcessor extends AbstractOutputProcessor {
                 try {
                     //encrypt the symmetric session key with the public key from the receiver:
                     String jceid = JCEAlgorithmMapper.translateURItoJCEID(encryptionKeyTransportAlgorithm);
-                    Cipher cipher = Cipher.getInstance(jceid);
+                    Cipher cipher = null;
+                    try {
+                        cipher = Cipher.getInstance(jceid);
+                    } catch (NoSuchPaddingException | NoSuchAlgorithmException e) {
+                        if (XMLCipher.RSA_OAEP.equals(encryptionKeyTransportAlgorithm)
+                            && FIPSUtils.isFIPSEnabled()) {
+                            //So far the in-JDK security provider in FIPS mode
+                            //doesn't support RSA-OAEP padding, try use the one 
+                            //from BC-FIPS as fallback
+                            try {
+                                Security.addProvider(new BouncyCastleFipsProvider());
+                                cipher = Cipher.getInstance(jceid);
+                            } finally {
+                                Security.removeProvider(new BouncyCastleFipsProvider().getName());
+                            }
+                        } else {
+                            throw e;
+                        }
+                    } 
 
                     AlgorithmParameterSpec algorithmParameterSpec = null;
                     if (XMLSecurityConstants.NS_XENC11_RSAOAEP.equals(encryptionKeyTransportAlgorithm)
