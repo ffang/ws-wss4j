@@ -24,6 +24,7 @@ import org.apache.xml.security.algorithms.JCEMapper;
 import org.apache.xml.security.encryption.XMLCipher;
 import org.apache.xml.security.signature.XMLSignature;
 import org.apache.xml.security.utils.JavaUtils;
+import org.bouncycastle.jcajce.provider.BouncyCastleFipsProvider;
 
 import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
@@ -33,6 +34,7 @@ import javax.crypto.spec.SecretKeySpec;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.NoSuchProviderException;
+import java.security.Security;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -187,6 +189,12 @@ public final class KeyUtils {
                 // Check to see if an RSA OAEP MGF-1 with SHA-1 algorithm was requested
                 // Some JCE implementations don't support RSA/ECB/OAEPPadding (e.g. nCipherKM of Thales)
                 try {
+                    if (FIPSUtils.isFIPSEnabled()) {
+                        //So far the in-JDK security provider in FIPS mode
+                        //doesn't support RSA-OAEP padding, try use the one 
+                        //from BC-FIPS as fallback
+                        Security.addProvider(new BouncyCastleFipsProvider());
+                    }
                     if (provider == null) {
                         return Cipher.getInstance(RSA_ECB_OAEPWITH_SHA1_AND_MGF1_PADDING);
                     } else {
@@ -207,6 +215,8 @@ public final class KeyUtils {
                     throw new WSSecurityException(
                         WSSecurityException.ErrorCode.UNSUPPORTED_ALGORITHM, e, "unsupportedKeyTransp",
                         new Object[]{"No such algorithm: \"" + RSA_ECB_OAEPWITH_SHA1_AND_MGF1_PADDING + "\""});
+                } finally {
+                    Security.removeProvider(new BouncyCastleFipsProvider().getName());
                 }
             } else {
                 if (e instanceof NoSuchAlgorithmException) {    //NOPMD

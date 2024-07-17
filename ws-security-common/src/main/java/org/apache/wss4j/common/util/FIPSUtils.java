@@ -20,9 +20,7 @@ package org.apache.wss4j.common.util;
 
 import java.security.AccessController;
 import java.security.PrivilegedAction;
-import java.security.Security;
 
-import org.bouncycastle.jcajce.provider.BouncyCastleFipsProvider;
 
 public final class FIPSUtils {
 
@@ -35,12 +33,6 @@ public final class FIPSUtils {
                 return System.getProperty(FIPS_ENABLED);
             }
         }));
-        if (isFIPSEnabled) {
-            //So far the in-JDK security provider in FIPS mode
-            //doesn't support RSA-OAEP padding, try use the one 
-            //from BC-FIPS
-            Security.addProvider(new BouncyCastleFipsProvider());
-        }
     }
     
     public static boolean isFIPSEnabled() {
