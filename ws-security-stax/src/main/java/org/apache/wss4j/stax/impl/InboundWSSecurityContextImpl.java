@@ -29,7 +29,6 @@ import javax.xml.namespace.QName;
 
 import org.apache.wss4j.common.bsp.BSPRule;
 import org.apache.wss4j.common.ext.WSSecurityException;
-import org.apache.wss4j.common.util.FIPSUtils;
 import org.apache.wss4j.stax.ext.WSInboundSecurityContext;
 import org.apache.wss4j.stax.ext.WSSConstants;
 import org.apache.wss4j.stax.securityEvent.HttpsTokenSecurityEvent;
@@ -60,7 +59,7 @@ public class InboundWSSecurityContextImpl extends InboundSecurityContextImpl imp
     private final Deque<SecurityEvent> securityEventQueue = new ArrayDeque<>();
     private boolean operationSecurityEventOccured = false;
     private boolean messageEncryptionTokenOccured = false;
-    private boolean allowRSA15KeyTransportAlgorithm = FIPSUtils.isFIPSEnabled();
+    private boolean allowRSA15KeyTransportAlgorithm = false;
     private boolean disableBSPEnforcement;
     private boolean soap12;
 
