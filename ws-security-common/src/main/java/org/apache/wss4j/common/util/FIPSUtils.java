@@ -21,6 +21,7 @@ package org.apache.wss4j.common.util;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
 
+
 public final class FIPSUtils {
 
     private static boolean isFIPSEnabled = false;
@@ -32,6 +33,7 @@ public final class FIPSUtils {
                 return System.getProperty(FIPS_ENABLED);
             }
         }));
+        
     }
     
     public static boolean isFIPSEnabled() {

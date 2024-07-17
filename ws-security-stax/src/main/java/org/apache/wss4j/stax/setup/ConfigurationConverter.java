@@ -37,7 +37,6 @@ import org.apache.wss4j.common.crypto.CryptoFactory;
 import org.apache.wss4j.common.crypto.JasyptPasswordEncryptor;
 import org.apache.wss4j.common.crypto.PasswordEncryptor;
 import org.apache.wss4j.common.ext.WSSecurityException;
-import org.apache.wss4j.common.util.FIPSUtils;
 import org.apache.wss4j.common.util.Loader;
 import org.apache.wss4j.stax.ext.WSSConstants;
 import org.apache.wss4j.stax.ext.WSSConstants.UsernameTokenPasswordType;
@@ -442,8 +441,7 @@ public final class ConfigurationConverter {
         properties.setStrictTimestampCheck(timestampStrict);
 
         boolean allowRSA15 =
-            decodeBooleanConfigValue(ConfigurationConstants.ALLOW_RSA15_KEY_TRANSPORT_ALGORITHM,
-                                     FIPSUtils.isFIPSEnabled(), config);
+            decodeBooleanConfigValue(ConfigurationConstants.ALLOW_RSA15_KEY_TRANSPORT_ALGORITHM, false, config);
         properties.setAllowRSA15KeyTransportAlgorithm(allowRSA15);
 
         boolean validateSamlSubjectConf =

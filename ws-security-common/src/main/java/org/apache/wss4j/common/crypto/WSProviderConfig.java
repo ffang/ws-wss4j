@@ -26,6 +26,7 @@ import java.security.PrivilegedExceptionAction;
 import java.security.Provider;
 import java.security.Security;
 
+import org.apache.wss4j.common.util.FIPSUtils;
 import org.apache.wss4j.common.util.Loader;
 import org.apache.xml.security.utils.I18n;
 import org.apache.xml.security.utils.XMLUtils;
@@ -79,6 +80,24 @@ public final class WSProviderConfig {
                 bcProviderAdded = false;
                 tlProviderAdded = false;
             }
+            if (FIPSUtils.isFIPSEnabled()) {
+                //So far the in-JDK security provider in FIPS mode
+                //doesn't support RSA-OAEP padding, try use the one 
+                //from BC-FIPS as last resort
+                for (Provider provider : Security.getProviders()) {
+                    System.out.println("pre==========> the provider is " + provider.getName());
+                }
+
+                AccessController.doPrivileged(new PrivilegedAction<Boolean>() {
+                    public Boolean run() {
+                        addJceProvider("BCFIPS", "org.bouncycastle.jcajce.provider.BouncyCastleFipsProvider");
+                        return true;
+                    }
+                });
+                for (Provider provider : Security.getProviders()) {
+                    System.out.println("==========> the provider is " + provider.getName());
+                }
+            }
             staticallyInitialized = true;
         }
     }
@@ -105,6 +124,26 @@ public final class WSProviderConfig {
                         return true;
                     }
                 });
+            }
+            if (FIPSUtils.isFIPSEnabled()) {
+                //So far the in-JDK security provider in FIPS mode
+                //doesn't support RSA-OAEP padding, try use the one 
+                //from BC-FIPS as last resort
+                
+
+                AccessController.doPrivileged(new PrivilegedAction<Boolean>() {
+                    public Boolean run() {
+                        for (Provider provider : Security.getProviders()) {
+                            System.out.println("pre==========> the provider is " + provider.getName());
+                        }
+                        addJceProvider("BCFIPS", "org.bouncycastle.jcajce.provider.BouncyCastleFipsProvider");
+                        for (Provider provider : Security.getProviders()) {
+                            System.out.println("==========> the provider is " + provider.getName());
+                        }
+                        return true;
+                    }
+                });
+                
             }
 
             tlProviderAdded = addTLProv;
