@@ -39,7 +39,8 @@ public final class FIPSUtils {
             //So far the in-JDK security provider in FIPS mode
             //doesn't support RSA-OAEP padding, try use the one 
             //from BC-FIPS
-            Security.addProvider(new BouncyCastleFipsProvider());
+            int pos = Security.addProvider(new BouncyCastleFipsProvider());
+            System.out.println("==========> the postion of BC FIPS provider is " + pos);
         }
     }
     
