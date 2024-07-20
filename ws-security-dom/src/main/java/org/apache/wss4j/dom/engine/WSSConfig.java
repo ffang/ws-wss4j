@@ -34,7 +34,6 @@ import org.apache.wss4j.dom.WsuIdAllocator;
 import org.apache.wss4j.dom.action.Action;
 import org.apache.wss4j.common.crypto.WSProviderConfig;
 import org.apache.wss4j.common.ext.WSSecurityException;
-import org.apache.wss4j.common.util.FIPSUtils;
 import org.apache.wss4j.common.util.WSCurrentTimeSource;
 import org.apache.wss4j.common.util.WSTimeSource;
 import org.apache.wss4j.dom.processor.Processor;
@@ -245,7 +244,7 @@ public final class WSSConfig {
      * These providers, and the order in which they are added, can interfere
      * with some JVMs (such as IBMs).
      */
-    private static boolean addJceProviders = !FIPSUtils.isFIPSEnabled();
+    private static boolean addJceProviders = true;
 
     /**
      * a boolean flag to record whether we have already been statically
