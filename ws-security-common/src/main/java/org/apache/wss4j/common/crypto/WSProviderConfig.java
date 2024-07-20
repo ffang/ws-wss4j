@@ -111,12 +111,19 @@ public final class WSProviderConfig {
                 //So far the in-JDK security provider in FIPS mode
                 //doesn't support RSA-OAEP padding, try use the one 
                 //from BC-FIPS as last resort
+                for (Provider provider : Security.getProviders()) {
+                    System.out.println("pre==========> the provider is " + provider.getName());
+                }
+
                 AccessController.doPrivileged(new PrivilegedAction<Boolean>() {
                     public Boolean run() {
                         addJceProvider("BCFIPS", "org.bouncycastle.jcajce.provider.BouncyCastleFipsProvider");
                         return true;
                     }
                 });
+                for (Provider provider : Security.getProviders()) {
+                    System.out.println("==========> the provider is " + provider.getName());
+                }
             }
 
             tlProviderAdded = addTLProv;
