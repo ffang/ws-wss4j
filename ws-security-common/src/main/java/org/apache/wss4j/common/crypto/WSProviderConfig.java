@@ -256,6 +256,7 @@ public final class WSProviderConfig {
                 Provider provider = clazz.getDeclaredConstructor().newInstance();
                 return addJceProvider(name, provider);
             } catch (Throwable t) {
+                t.printStackTrace();
                 if (LOG.isDebugEnabled()) {
                     LOG.debug("The provider " + name + " could not be added: " + t.getMessage(), t);
                 }
