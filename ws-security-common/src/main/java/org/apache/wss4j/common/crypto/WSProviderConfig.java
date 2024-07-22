@@ -47,7 +47,7 @@ public final class WSProviderConfig {
      * These providers, and the order in which they are added, can interfere
      * with some JVMs (such as IBMs).
      */
-    private static boolean addJceProviders = !FIPSUtils.isFIPSEnabled();
+    private static boolean addJceProviders = true;
 
     /**
      * a boolean flag to record whether we have already been statically
