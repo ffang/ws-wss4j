@@ -35,6 +35,7 @@ import javax.crypto.spec.OAEPParameterSpec;
 
 import org.apache.wss4j.common.WSS4JConstants;
 import org.apache.wss4j.common.token.DOMX509SKI;
+import org.apache.wss4j.dom.message.WSSecEncryptedKey;
 import org.apache.xml.security.encryption.AgreementMethod;
 import org.apache.xml.security.encryption.KeyDerivationMethod;
 import org.apache.xml.security.encryption.XMLCipherUtil;
@@ -362,6 +363,11 @@ public class EncryptedKeyProcessor implements Processor {
         Element encryptedKeyElement,
         PrivateKey privateKey
     ) throws WSSecurityException {
+        if (WSS4JConstants.KEYTRANSPORT_ML_KEM_512.equals(encryptedKeyTransportMethod)
+                || WSS4JConstants.KEYTRANSPORT_ML_KEM_768.equals(encryptedKeyTransportMethod)
+                || WSS4JConstants.KEYTRANSPORT_ML_KEM_1024.equals(encryptedKeyTransportMethod)) {
+            return decapsulateMLKEM(encryptedKeyTransportMethod, privateKey, encryptedEphemeralKey);
+        }
         if (data.getDecCrypto() == null) {
             throw new WSSecurityException(WSSecurityException.ErrorCode.FAILURE, "noDecCryptoFile");
         }
@@ -438,6 +444,26 @@ public class EncryptedKeyProcessor implements Processor {
             return cipher.unwrap(encryptedEphemeralKey, keyAlgorithm, Cipher.SECRET_KEY).getEncoded();
         } catch (InvalidKeyException | NoSuchAlgorithmException ex) {
             throw new WSSecurityException(WSSecurityException.ErrorCode.FAILED_CHECK, ex);
+        }
+    }
+
+    /**
+     * Performs ML-KEM (FIPS 203) decapsulation using BouncyCastle's KEMExtractSpec.
+     * The encapsulationBytes from the CipherValue are the KEM ciphertext; the
+     * returned shared secret is used directly as the symmetric CEK.
+     */
+    private static byte[] decapsulateMLKEM(String encAlgo, PrivateKey privateKey,
+                                            byte[] encapsulationBytes)
+            throws WSSecurityException {
+        try {
+            String jcaName = WSSecEncryptedKey.mlKemJcaName(encAlgo);
+            javax.crypto.KeyGenerator kg = javax.crypto.KeyGenerator.getInstance(jcaName, "BC");
+            kg.init(new org.bouncycastle.jcajce.spec.KEMExtractSpec(
+                    privateKey, encapsulationBytes, "AES"), null);
+            javax.crypto.SecretKey sharedSecret = kg.generateKey();
+            return sharedSecret.getEncoded();
+        } catch (Exception e) {
+            throw new WSSecurityException(WSSecurityException.ErrorCode.FAILED_CHECK, e);
         }
     }
 
@@ -811,10 +837,13 @@ public class EncryptedKeyProcessor implements Processor {
                 bspEnforcer.handleBSPRule(BSPRule.R5625);
             }
         } else {
-            // EncryptionAlgorithm must be RSA15, or RSAOEP.
+            // EncryptionAlgorithm must be RSA15, RSAOAEP, or ML-KEM (BSP R5621).
             if (!(WSConstants.KEYTRANSPORT_RSA15.equals(encAlgo)
                     || WSConstants.KEYTRANSPORT_RSAOAEP.equals(encAlgo)
-                    || WSConstants.KEYTRANSPORT_RSAOAEP_XENC11.equals(encAlgo))) {
+                    || WSConstants.KEYTRANSPORT_RSAOAEP_XENC11.equals(encAlgo)
+                    || WSS4JConstants.KEYTRANSPORT_ML_KEM_512.equals(encAlgo)
+                    || WSS4JConstants.KEYTRANSPORT_ML_KEM_768.equals(encAlgo)
+                    || WSS4JConstants.KEYTRANSPORT_ML_KEM_1024.equals(encAlgo))) {
                 bspEnforcer.handleBSPRule(BSPRule.R5621);
             }
         }

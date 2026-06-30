@@ -250,6 +250,17 @@ public class AlgorithmSuiteValidator {
                 throw new WSSecurityException(WSSecurityException.ErrorCode.INVALID_SECURITY);
             }
         } else {
+            String algo = publicKey.getAlgorithm();
+            // ML-DSA and ML-KEM keys have no classical bit-length; validate by security level.
+            if (algo != null && (algo.startsWith("ML-DSA-") || algo.startsWith("ML-KEM-"))) {
+                int level = pqcSecurityLevel(algo);
+                int required = pqcLevelFromMinKeyLength(algorithmSuite.getMinimumAsymmetricKeyLength());
+                if (level < required) {
+                    LOG.warn("PQC key security level {} is below required level {}", level, required);
+                    throw new WSSecurityException(WSSecurityException.ErrorCode.INVALID_SECURITY);
+                }
+                return;
+            }
             // Try with last supported key types EdEC and XDH
             int keySize = getEdECndXDHKeyLength(publicKey);
             if (keySize < algorithmSuite.getMinimumEllipticCurveKeyLength()
@@ -260,6 +271,25 @@ public class AlgorithmSuiteValidator {
                 throw new WSSecurityException(WSSecurityException.ErrorCode.INVALID_SECURITY);
             }
         }
+    }
+
+    private static int pqcSecurityLevel(String algo) {
+        return switch (algo) {
+            case "ML-DSA-44", "ML-KEM-512"  -> 1;
+            case "ML-DSA-65", "ML-KEM-768"  -> 3;
+            case "ML-DSA-87", "ML-KEM-1024" -> 5;
+            default -> 0;
+        };
+    }
+
+    private static int pqcLevelFromMinKeyLength(int minBits) {
+        if (minBits >= 7680) {
+            return 5;
+        }
+        if (minBits >= 3072) {
+            return 3;
+        }
+        return 1;
     }
 
     /**

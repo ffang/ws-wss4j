@@ -198,6 +198,22 @@ public class AlgorithmSuite extends AbstractSecurityAssertion implements PolicyC
                 SPConstants.P_SHA1_L192,
                 192, 192, 192,
                 MAX_SKL, MIN_AKL, MAX_AKL));
+        // PQC suite: ML-DSA-65 signatures + ML-KEM-768 key transport + AES-256-GCM content.
+        // Security level 3 (~192-bit classical equivalent).
+        // minimumAsymmetricKeyLength is 0 because PQC keys have no classical bit-length;
+        // AlgorithmSuiteValidator uses security-level checks for ML-DSA/ML-KEM instead.
+        ALGORITHM_SUITE_TYPES.put("Basic256MlDsa65", new AlgorithmSuiteType(
+                "Basic256MlDsa65",
+                SPConstants.SHA256,
+                SPConstants.AES256,
+                SPConstants.KW_AES256,
+                SPConstants.KW_ML_KEM_768,
+                SPConstants.P_SHA1_L256,
+                SPConstants.P_SHA1_L256,
+                SPConstants.HMAC_SHA1,
+                SPConstants.ML_DSA_65,
+                256, 256, 256,
+                MAX_SKL, 0, 0));
     }
 
     public static final class AlgorithmSuiteType {

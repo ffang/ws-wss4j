@@ -182,6 +182,24 @@ public class WSS4JConstants {
     public static final String ED448 =
             "http://www.w3.org/2021/04/xmldsig-more#eddsa-ed448";
 
+    // Provisional URIs for ML-DSA (FIPS 204) signature algorithms.
+    // No W3C/IETF standard exists yet; pattern follows xmldsig-more (RFC 9231).
+    public static final String ML_DSA_44 =
+            "http://www.w3.org/2021/04/xmldsig-more#ml-dsa-44";
+    public static final String ML_DSA_65 =
+            "http://www.w3.org/2021/04/xmldsig-more#ml-dsa-65";
+    public static final String ML_DSA_87 =
+            "http://www.w3.org/2021/04/xmldsig-more#ml-dsa-87";
+
+    // Provisional URIs for ML-KEM (FIPS 203) key-encapsulation transport.
+    // Used as EncryptionMethod/@Algorithm on the xenc:EncryptedKey element.
+    public static final String KEYTRANSPORT_ML_KEM_512 =
+            "http://www.w3.org/2021/04/xmlenc-more#ml-kem-512";
+    public static final String KEYTRANSPORT_ML_KEM_768 =
+            "http://www.w3.org/2021/04/xmlenc-more#ml-kem-768";
+    public static final String KEYTRANSPORT_ML_KEM_1024 =
+            "http://www.w3.org/2021/04/xmlenc-more#ml-kem-1024";
+
     public static final String MGF_SHA1 = "http://www.w3.org/2009/xmlenc11#mgf1sha1";
     public static final String MGF_SHA224 = "http://www.w3.org/2009/xmlenc11#mgf1sha224";
     public static final String MGF_SHA256 = "http://www.w3.org/2009/xmlenc11#mgf1sha256";

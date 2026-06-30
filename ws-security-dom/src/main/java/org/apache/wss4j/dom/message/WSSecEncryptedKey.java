@@ -146,6 +146,12 @@ public class WSSecEncryptedKey extends WSSecBase {
 
     private String encryptedKeySHA1;
 
+    /**
+     * Symmetric key derived from an ML-KEM encapsulation. Non-null only when
+     * keyEncAlgo is one of the KEYTRANSPORT_ML_KEM_* URIs.
+     */
+    private SecretKey kemDerivedKey;
+
     public WSSecEncryptedKey(WSSecHeader securityHeader) {
         super(securityHeader);
     }
@@ -197,6 +203,10 @@ public class WSSecEncryptedKey extends WSSecBase {
     public void prepare(Crypto crypto, SecretKey symmetricKey) throws WSSecurityException {
 
         if (useThisPublicKey != null) {
+            if (isMLKem(keyEncAlgo)) {
+                buildMLKEMEncapsulation(useThisPublicKey, null, null);
+                return;
+            }
             createEncryptedKeyElement(useThisPublicKey);
             byte[] encryptedEphemeralKey = encryptSymmetricKey(useThisPublicKey, symmetricKey);
             addCipherValueElement(encryptedEphemeralKey);
@@ -225,6 +235,11 @@ public class WSSecEncryptedKey extends WSSecBase {
                 remoteCert = certs[0];
             }
 
+            if (isMLKem(keyEncAlgo)) {
+                buildMLKEMEncapsulation(remoteCert.getPublicKey(), remoteCert, crypto);
+                return;
+            }
+
             Key kek;
             KeyAgreementParameters dhSpec = null;
             if (isKeyAgreementConfigured(keyAgreementMethod)) {
@@ -239,6 +254,14 @@ public class WSSecEncryptedKey extends WSSecBase {
             byte[] encryptedEphemeralKey = encryptSymmetricKey(kek, symmetricKey);
             addCipherValueElement(encryptedEphemeralKey);
         }
+    }
+
+    /**
+     * Returns the symmetric key derived from ML-KEM encapsulation, or {@code null}
+     * when a classical key-transport algorithm was used.
+     */
+    public SecretKey getKemDerivedKey() {
+        return kemDerivedKey;
     }
 
     /**
@@ -387,6 +410,70 @@ public class WSSecEncryptedKey extends WSSecBase {
 
             Element keyInfoElement = createKeyInfoElement(secToken.getElement(), dhSpec);
             encryptedKeyElement.appendChild(keyInfoElement);
+        }
+    }
+
+    /**
+     * Returns true when {@code algo} is one of the ML-KEM key-transport URIs.
+     */
+    static boolean isMLKem(String algo) {
+        return WSS4JConstants.KEYTRANSPORT_ML_KEM_512.equals(algo)
+            || WSS4JConstants.KEYTRANSPORT_ML_KEM_768.equals(algo)
+            || WSS4JConstants.KEYTRANSPORT_ML_KEM_1024.equals(algo);
+    }
+
+    /**
+     * Maps a KEYTRANSPORT_ML_KEM_* URI to the JCA algorithm name understood by BC.
+     */
+    public static String mlKemJcaName(String uri) {
+        if (WSS4JConstants.KEYTRANSPORT_ML_KEM_512.equals(uri)) {
+            return "ML-KEM-512";
+        }
+        if (WSS4JConstants.KEYTRANSPORT_ML_KEM_768.equals(uri)) {
+            return "ML-KEM-768";
+        }
+        if (WSS4JConstants.KEYTRANSPORT_ML_KEM_1024.equals(uri)) {
+            return "ML-KEM-1024";
+        }
+        throw new IllegalArgumentException("Unknown ML-KEM URI: " + uri);
+    }
+
+    /**
+     * Performs ML-KEM (FIPS 203) encapsulation using BouncyCastle's KEMGenerateSpec.
+     * The BC generator returns both the KEM ciphertext (→ CipherValue) and the
+     * shared secret (→ stored in {@link #kemDerivedKey}). The shared secret is
+     * the symmetric CEK; no separate key-wrap step is needed.
+     *
+     * @param recipientPublicKey the recipient's ML-KEM public key
+     * @param remoteCert recipient certificate used to build KeyInfo; may be null
+     * @param crypto Crypto instance; used only when remoteCert is non-null
+     * @throws WSSecurityException if encapsulation fails
+     */
+    private void buildMLKEMEncapsulation(PublicKey recipientPublicKey,
+                                         X509Certificate remoteCert, Crypto crypto)
+            throws WSSecurityException {
+        try {
+            String jcaName = mlKemJcaName(keyEncAlgo);
+            javax.crypto.KeyGenerator kg = javax.crypto.KeyGenerator.getInstance(jcaName, "BC");
+            kg.init(new org.bouncycastle.jcajce.spec.KEMGenerateSpec(recipientPublicKey, "AES"),
+                    new java.security.SecureRandom());
+            // BC 1.84: generateKey() returns SecretKeyWithEncapsulation (not SecretWithEncapsulation).
+            // The shared secret is in getEncoded() and the KEM ciphertext in getEncapsulation().
+            org.bouncycastle.jcajce.SecretKeyWithEncapsulation swe =
+                    (org.bouncycastle.jcajce.SecretKeyWithEncapsulation) kg.generateKey();
+
+            // All ML-KEM variants produce a 32-byte shared secret (256-bit AES key).
+            kemDerivedKey = new javax.crypto.spec.SecretKeySpec(
+                    swe.getEncoded(), 0, 32, "AES");
+
+            if (remoteCert != null) {
+                createEncryptedKeyElement(remoteCert, crypto, null);
+            } else if (useThisPublicKey != null) {
+                createEncryptedKeyElement(useThisPublicKey);
+            }
+            addCipherValueElement(swe.getEncapsulation());
+        } catch (Exception e) {
+            throw new WSSecurityException(WSSecurityException.ErrorCode.FAILED_ENCRYPTION, e);
         }
     }
 
