@@ -22,14 +22,26 @@ package org.apache.wss4j.dom.message;
 import java.math.BigInteger;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
+import java.security.KeyStore;
 import java.security.Security;
-import java.security.Signature;
 import java.security.cert.X509Certificate;
 import java.util.Date;
+import java.util.List;
+
+import javax.security.auth.callback.CallbackHandler;
 
 import org.apache.wss4j.common.WSS4JConstants;
-import org.apache.wss4j.common.crypto.AlgorithmSuiteValidator;
-import org.apache.wss4j.common.crypto.AlgorithmSuite;
+import org.apache.wss4j.common.crypto.Crypto;
+import org.apache.wss4j.common.crypto.Merlin;
+import org.apache.wss4j.common.ext.WSPasswordCallback;
+import org.apache.wss4j.common.util.SOAPUtil;
+import org.apache.wss4j.common.util.XMLUtils;
+import org.apache.wss4j.dom.WSConstants;
+import org.apache.wss4j.dom.engine.WSSConfig;
+import org.apache.wss4j.dom.engine.WSSecurityEngine;
+import org.apache.wss4j.dom.engine.WSSecurityEngineResult;
+import org.apache.wss4j.dom.handler.RequestData;
+import org.apache.wss4j.dom.handler.WSHandlerResult;
 import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
 import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder;
@@ -40,26 +52,25 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.w3c.dom.Document;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
- * Tests for ML-DSA (FIPS 204) in WS-Security.
+ * Tests for ML-DSA (FIPS 204) WS-Security signatures.
  *
- * <p>ML-DSA key-type auto-detection and direct BC signature operations are tested here.
- * Full WS-Security XML-Dsig round-trip with ML-DSA requires Santuario to register
- * a {@code DOMMLDSASignatureMethod} implementation — that work belongs in Santuario,
- * not in wss4j.
- *
- * <p>Requires BouncyCastle 1.81+ and JDK 17+.
+ * <p>Requires BouncyCastle 1.81+ and Santuario xmlsec 4.0.5-SNAPSHOT (or later)
+ * which adds {@code DOMMLDSASignatureMethod} support for ML-DSA URIs.
  */
 public class PQCSignatureTest {
 
     private static final org.slf4j.Logger LOG =
         org.slf4j.LoggerFactory.getLogger(PQCSignatureTest.class);
+
+    private static final String ML_DSA_ALIAS = "mldsa-test";
+    private static final char[] KS_PASSWORD = "pqctest".toCharArray();
 
     private static boolean bcAvailable;
 
@@ -73,6 +84,7 @@ public class PQCSignatureTest {
             LOG.info("ML-DSA not available (BC < 1.81 or provider missing): {}", e.getMessage());
             bcAvailable = false;
         }
+        WSSConfig.init();
     }
 
     @AfterAll
@@ -81,8 +93,10 @@ public class PQCSignatureTest {
     }
 
     /**
-     * Verifies that the algorithm URI auto-detection in {@link WSSecSignature}
-     * maps each ML-DSA JCA name to the correct provisional URI.
+     * Full WS-Security sign + verify round-trip with ML-DSA.
+     * Signs a SOAP envelope using {@link WSSecSignature} then verifies it
+     * with {@link WSSecurityEngine}. Exercises the complete path through
+     * Santuario's {@code DOMXMLSignatureFactory} with the ML-DSA URI.
      */
     @ParameterizedTest
     @CsvSource({
@@ -90,85 +104,48 @@ public class PQCSignatureTest {
         "ML-DSA-65," + WSS4JConstants.ML_DSA_65,
         "ML-DSA-87," + WSS4JConstants.ML_DSA_87
     })
-    public void testMLDSAAlgorithmUriAutoDetection(String jcaName, String expectedUri)
-            throws Exception {
+    public void testMLDSAWSSSignAndVerify(String jcaName, String sigAlgoUri) throws Exception {
         assumeTrue(bcAvailable, "ML-DSA requires BouncyCastle 1.81+");
 
         KeyPair kp = KeyPairGenerator.getInstance(jcaName, "BC").generateKeyPair();
         X509Certificate cert = buildSelfSignedCert(kp, jcaName);
+        Crypto crypto = buildMerlin(kp, cert);
 
-        // Simulate what WSSecSignature does: detect sigAlgo from cert public key
-        String pubKeyAlgo = cert.getPublicKey().getAlgorithm();
-        String sigAlgo = null;
-        if (pubKeyAlgo.equalsIgnoreCase("ML-DSA-44")) {
-            sigAlgo = WSS4JConstants.ML_DSA_44;
-        } else if (pubKeyAlgo.equalsIgnoreCase("ML-DSA-65")) {
-            sigAlgo = WSS4JConstants.ML_DSA_65;
-        } else if (pubKeyAlgo.equalsIgnoreCase("ML-DSA-87")) {
-            sigAlgo = WSS4JConstants.ML_DSA_87;
-        }
+        // --- Sign ---
+        Document doc = SOAPUtil.toSOAPPart(SOAPUtil.SAMPLE_SOAP_MSG);
+        WSSecHeader secHeader = new WSSecHeader(doc);
+        secHeader.insertSecurityHeader();
 
-        assertNotNull(sigAlgo, "Algorithm URI must be detected for " + jcaName);
-        assertEquals(expectedUri, sigAlgo, "Detected URI must match expected");
-        LOG.debug("{} → {}", pubKeyAlgo, sigAlgo);
-    }
+        WSSecSignature builder = new WSSecSignature(secHeader);
+        builder.setUserInfo(ML_DSA_ALIAS, new String(KS_PASSWORD));
+        builder.setKeyIdentifierType(WSConstants.ISSUER_SERIAL);
+        builder.setSignatureAlgorithm(sigAlgoUri);
+        Document signedDoc = builder.build(crypto);
 
-    /**
-     * Verifies that BC can sign and verify with ML-DSA natively.
-     * This confirms the JCA provider round-trip works before XML-Dsig integration.
-     */
-    @ParameterizedTest
-    @CsvSource({
-        "ML-DSA-44",
-        "ML-DSA-65",
-        "ML-DSA-87"
-    })
-    public void testMLDSABcSignatureRoundTrip(String jcaName) throws Exception {
-        assumeTrue(bcAvailable, "ML-DSA requires BouncyCastle 1.81+");
+        String xml = XMLUtils.prettyDocumentToString(signedDoc);
+        LOG.debug("Signed ML-DSA ({}) document:\n{}", jcaName, xml);
+        assertTrue(xml.contains(sigAlgoUri),
+            "Signed document must contain the ML-DSA algorithm URI");
 
-        KeyPair kp = KeyPairGenerator.getInstance(jcaName, "BC").generateKeyPair();
-        byte[] data = "Hello ML-DSA WS-Security".getBytes();
+        // --- Verify ---
+        RequestData reqData = new RequestData();
+        reqData.setSigVerCrypto(crypto);
+        reqData.setCallbackHandler(mlDsaCallbackHandler());
+        reqData.setWssConfig(WSSConfig.getNewInstance());
 
-        Signature signer = Signature.getInstance(jcaName, "BC");
-        signer.initSign(kp.getPrivate());
-        signer.update(data);
-        byte[] sig = signer.sign();
+        WSSecurityEngine engine = new WSSecurityEngine();
+        WSHandlerResult results = engine.processSecurityHeader(signedDoc, reqData);
 
-        assertTrue(sig.length > 0, "Signature must not be empty");
+        WSSecurityEngineResult sigResult = results.getActionResults()
+            .getOrDefault(WSConstants.SIGN, List.of())
+            .stream().findFirst().orElse(null);
+        assertNotNull(sigResult, "Engine must produce a SIGN result");
 
-        Signature verifier = Signature.getInstance(jcaName, "BC");
-        verifier.initVerify(kp.getPublic());
-        verifier.update(data);
-        assertTrue(verifier.verify(sig), "Signature must verify correctly");
-        LOG.debug("{} signature length: {} bytes", jcaName, sig.length);
-    }
-
-    /**
-     * Verifies that {@link AlgorithmSuiteValidator} passes ML-DSA keys
-     * without throwing (security-level check, not bit-length check).
-     */
-    @ParameterizedTest
-    @CsvSource({
-        "ML-DSA-44",
-        "ML-DSA-65",
-        "ML-DSA-87"
-    })
-    public void testMLDSAKeyPassesAlgorithmSuiteValidator(String jcaName) throws Exception {
-        assumeTrue(bcAvailable, "ML-DSA requires BouncyCastle 1.81+");
-
-        KeyPair kp = KeyPairGenerator.getInstance(jcaName, "BC").generateKeyPair();
-
-        // Use a suite that requires elliptic-curve level 256 (security level 1 equivalent)
-        AlgorithmSuite suite = new AlgorithmSuite();
-        suite.setMinimumEllipticCurveKeyLength(0);
-        suite.setMaximumEllipticCurveKeyLength(Integer.MAX_VALUE);
-        suite.setMinimumAsymmetricKeyLength(0);
-        suite.setMaximumAsymmetricKeyLength(Integer.MAX_VALUE);
-
-        AlgorithmSuiteValidator validator = new AlgorithmSuiteValidator(suite);
-        // Must not throw
-        validator.checkAsymmetricKeyLength(kp.getPublic());
-        LOG.debug("{} key passed AlgorithmSuiteValidator check", jcaName);
+        X509Certificate verifiedCert =
+            (X509Certificate) sigResult.get(WSSecurityEngineResult.TAG_X509_CERTIFICATE);
+        assertNotNull(verifiedCert, "Verified certificate must be present in SIGN result");
+        LOG.debug("{} signature verified; subject: {}", jcaName,
+            verifiedCert.getSubjectX500Principal().getName());
     }
 
     // ---- helpers -------------------------------------------------------
@@ -178,14 +155,33 @@ public class PQCSignatureTest {
         X500Name subject = new X500Name("CN=" + jcaName + " Test, O=WSS4J PQC Test");
         Date notBefore = new Date();
         Date notAfter = new Date(notBefore.getTime() + 365L * 86_400_000L);
-
         ContentSigner signer = new JcaContentSignerBuilder(jcaName)
             .setProvider("BC").build(kp.getPrivate());
-
         return new JcaX509CertificateConverter()
             .setProvider("BC")
             .getCertificate(new JcaX509v3CertificateBuilder(
                 subject, BigInteger.ONE, notBefore, notAfter, subject, kp.getPublic())
                 .build(signer));
+    }
+
+    private static Crypto buildMerlin(KeyPair kp, X509Certificate cert) throws Exception {
+        KeyStore ks = KeyStore.getInstance("PKCS12", "BC");
+        ks.load(null, KS_PASSWORD);
+        ks.setKeyEntry(ML_DSA_ALIAS, kp.getPrivate(), KS_PASSWORD,
+            new java.security.cert.Certificate[]{cert});
+        Merlin merlin = new Merlin();
+        merlin.setKeyStore(ks);
+        return merlin;
+    }
+
+    private static CallbackHandler mlDsaCallbackHandler() {
+        return callbacks -> {
+            for (javax.security.auth.callback.Callback cb : callbacks) {
+                if (cb instanceof WSPasswordCallback pc
+                        && ML_DSA_ALIAS.equals(pc.getIdentifier())) {
+                    pc.setPassword(new String(KS_PASSWORD));
+                }
+            }
+        };
     }
 }

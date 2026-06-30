@@ -228,6 +228,71 @@ public class PQCEncryptionTest {
     }
 
     /**
+     * Tests that {@link WSSecEncrypt#build} with ML-KEM key transport (single-call API)
+     * correctly encrypts and decrypts the SOAP body.
+     *
+     * <p>Prior to the fix, {@code build()} would encrypt the body with a throwaway random
+     * symmetric key rather than the KEM-derived shared secret, causing decryption to fail.
+     */
+    @Test
+    public void testMLKEM768SingleCallBuildEncryptDecrypt() throws Exception {
+        assumeTrue(bcAvailable, "ML-KEM-768 requires BouncyCastle 1.81+");
+
+        Document doc = SOAPUtil.toSOAPPart(SOAPUtil.SAMPLE_SOAP_MSG);
+        WSSecHeader secHeader = new WSSecHeader(doc);
+        secHeader.insertSecurityHeader();
+
+        // Use WSSecEncrypt in single-call mode with ML-KEM key transport.
+        WSSecEncrypt wsEncrypt = new WSSecEncrypt(secHeader);
+        wsEncrypt.setSymmetricEncAlgorithm(WSConstants.AES_256_GCM);
+        wsEncrypt.setKeyEncAlgo(WSS4JConstants.KEYTRANSPORT_ML_KEM_768);
+        wsEncrypt.setKeyIdentifierType(WSConstants.ISSUER_SERIAL);
+        wsEncrypt.setUserInfo(ML_KEM_ALIAS);
+
+        // Generate a random AES key that would have been the wrong key before the fix.
+        javax.crypto.KeyGenerator keyGen =
+            javax.crypto.KeyGenerator.getInstance("AES");
+        keyGen.init(256);
+        SecretKey placeholderKey = keyGen.generateKey();
+
+        // build() must detect the ML-KEM path and use kemDerivedKey, not placeholderKey.
+        Document encryptedDoc = wsEncrypt.build(mlKemCrypto, placeholderKey);
+
+        String xml = XMLUtils.prettyDocumentToString(encryptedDoc);
+        assertTrue(xml.contains(WSS4JConstants.KEYTRANSPORT_ML_KEM_768),
+            "Encrypted document must contain the ML-KEM-768 key transport URI");
+        assertTrue(xml.contains(WSConstants.AES_256_GCM),
+            "Encrypted document must contain AES-256-GCM content encryption");
+        assertTrue(!xml.contains("counter_port_type"), "Body must be encrypted");
+
+        // Decrypt the document — this must succeed only if the correct CEK was used.
+        RequestData data = new RequestData();
+        data.setDecCrypto(mlKemCrypto);
+        data.setCallbackHandler(mlKemCallbackHandler());
+        data.setWssConfig(WSSConfig.getNewInstance());
+
+        WSSecurityEngine engine = new WSSecurityEngine();
+        WSHandlerResult results = engine.processSecurityHeader(encryptedDoc, data);
+
+        boolean foundBodyRef = false;
+        for (WSSecurityEngineResult result : results.getResults()) {
+            Integer action = (Integer) result.get(WSSecurityEngineResult.TAG_ACTION);
+            if (action != null && (action & WSConstants.ENCR) != 0) {
+                @SuppressWarnings("unchecked")
+                List<WSDataRef> refs = (List<WSDataRef>) result.get(WSSecurityEngineResult.TAG_DATA_REF_URIS);
+                if (refs != null) {
+                    for (WSDataRef ref : refs) {
+                        if (ref.getName() != null && "Body".equals(ref.getName().getLocalPart())) {
+                            foundBodyRef = true;
+                        }
+                    }
+                }
+            }
+        }
+        assertTrue(foundBodyRef, "Decrypted data refs must include the SOAP Body");
+    }
+
+    /**
      * Verify that the BSP whitelist accepts ML-KEM URIs without throwing.
      */
     @Test

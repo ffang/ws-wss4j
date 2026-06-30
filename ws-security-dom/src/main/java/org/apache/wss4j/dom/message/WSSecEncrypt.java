@@ -140,7 +140,10 @@ public class WSSecEncrypt extends WSSecEncryptedKey {
 
         LOG.debug("Beginning Encryption...");
 
-        Element refs = encrypt(symmetricKey);
+        // For ML-KEM key transport, the actual CEK is the KEM-derived shared secret, not
+        // the caller-supplied symmetricKey (which was generated as a random placeholder).
+        SecretKey encKey = (getKemDerivedKey() != null) ? getKemDerivedKey() : symmetricKey;
+        Element refs = encrypt(encKey);
 
         addAttachmentEncryptedDataElements();
         if (getEncryptedKeyElement() != null) {
