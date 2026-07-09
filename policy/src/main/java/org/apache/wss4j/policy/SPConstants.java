@@ -328,13 +328,13 @@ public abstract class SPConstants {
             "http://www.w3.org/2021/04/xmldsig-more#ml-dsa-87";
 
     public static final String KW_ML_KEM_512 =
-            "http://www.w3.org/2021/04/xmlenc-more#ml-kem-512";
+            "http://www.w3.org/2021/04/xmldsig-more#ml-kem-512";
 
     public static final String KW_ML_KEM_768 =
-            "http://www.w3.org/2021/04/xmlenc-more#ml-kem-768";
+            "http://www.w3.org/2021/04/xmldsig-more#ml-kem-768";
 
     public static final String KW_ML_KEM_1024 =
-            "http://www.w3.org/2021/04/xmlenc-more#ml-kem-1024";
+            "http://www.w3.org/2021/04/xmldsig-more#ml-kem-1024";
 
     public static final String P_SHA1 = "http://schemas.xmlsoap.org/ws/2005/02/sc/dk/p_sha1";
 

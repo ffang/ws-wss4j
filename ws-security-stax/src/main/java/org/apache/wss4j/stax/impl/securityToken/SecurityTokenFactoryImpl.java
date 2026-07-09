@@ -22,9 +22,11 @@ import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
+import java.security.Key;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.Principal;
+import java.security.PrivateKey;
 import java.security.cert.CertificateEncodingException;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
@@ -62,8 +64,10 @@ import org.apache.xml.security.stax.ext.SecurityContext;
 import org.apache.xml.security.stax.ext.XMLSecurityConstants;
 import org.apache.xml.security.stax.ext.XMLSecurityProperties;
 import org.apache.xml.security.stax.ext.XMLSecurityUtils;
+import org.apache.xml.security.stax.impl.securityToken.AbstractInboundSecurityToken;
 import org.apache.xml.security.stax.impl.util.IDGenerator;
 import org.apache.xml.security.stax.securityToken.InboundSecurityToken;
+import org.apache.xml.security.stax.securityToken.SecurityTokenConstants;
 import org.apache.xml.security.stax.securityToken.SecurityTokenFactory;
 import org.apache.xml.security.stax.securityToken.SecurityTokenProvider;
 import org.apache.xml.security.utils.XMLUtils;
@@ -112,6 +116,25 @@ public class SecurityTokenFactoryImpl extends SecurityTokenFactory {
                     (WSSSecurityProperties)securityProperties
             );
         }
+
+        // Fallback for PQC and other cases where no KeyInfo was emitted:
+        // use the directly configured decryption key (e.g. ML-KEM private key via setDecryptionKey).
+        Key decryptionKey = securityProperties.getDecryptionKey();
+        if (decryptionKey instanceof PrivateKey) {
+            final PrivateKey privateKey = (PrivateKey) decryptionKey;
+            AbstractInboundSecurityToken token = new AbstractInboundSecurityToken(
+                    (InboundSecurityContext) inboundSecurityContext,
+                    IDGenerator.generateID(null),
+                    SecurityTokenConstants.KeyIdentifier_NoKeyInfo, true) {
+                @Override
+                public SecurityTokenConstants.TokenType getTokenType() {
+                    return SecurityTokenConstants.KeyValueToken;
+                }
+            };
+            token.setSecretKey("", privateKey);
+            return token;
+        }
+
         throw new WSSecurityException(WSSecurityException.ErrorCode.INVALID_SECURITY, "noKeyinfo");
     }
 
@@ -483,6 +506,25 @@ public class SecurityTokenFactoryImpl extends SecurityTokenFactory {
             return new ECKeyValueSecurityTokenImpl(ecKeyValueType, (WSInboundSecurityContext) securityContext, crypto,
                                                    callbackHandler, securityProperties);
         }
+
+        // Fallback for PQC and other key types not represented in KeyValue XML:
+        // use a directly configured decryption key (e.g. ML-KEM private key set via setDecryptionKey).
+        Key decryptionKey = securityProperties.getDecryptionKey();
+        if (decryptionKey instanceof PrivateKey) {
+            final PrivateKey privateKey = (PrivateKey) decryptionKey;
+            AbstractInboundSecurityToken token = new AbstractInboundSecurityToken(
+                    (InboundSecurityContext) securityContext,
+                    IDGenerator.generateID(null),
+                    SecurityTokenConstants.KeyIdentifier_NoKeyInfo, true) {
+                @Override
+                public SecurityTokenConstants.TokenType getTokenType() {
+                    return SecurityTokenConstants.KeyValueToken;
+                }
+            };
+            token.setSecretKey("", privateKey);
+            return token;
+        }
+
         throw new WSSecurityException(WSSecurityException.ErrorCode.INVALID_SECURITY, "unsupportedKeyInfo");
     }
 

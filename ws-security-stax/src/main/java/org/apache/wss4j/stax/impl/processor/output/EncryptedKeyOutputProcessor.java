@@ -264,13 +264,28 @@ public class EncryptedKeyOutputProcessor extends AbstractOutputProcessor {
                 }
 
                 createEndElementAndOutputAsEvent(subOutputProcessorChain, WSSConstants.TAG_xenc_EncryptionMethod);
-                createStartElementAndOutputAsEvent(subOutputProcessorChain, WSSConstants.TAG_dsig_KeyInfo, true, null);
+
+                // For PQC keys (e.g., ML-KEM) without a certificate, omit ds:KeyInfo entirely.
+                // The receiver uses the directly configured decryption key (setDecryptionKey).
+                boolean hasCerts = securityToken.getKeyWrappingToken().getX509Certificates() != null
+                    && securityToken.getKeyWrappingToken().getX509Certificates().length > 0;
+                boolean hasCustomRef = securityToken.getCustomTokenReference() != null;
+                String wrappingKeyAlg = publicKey.getAlgorithm();
+                boolean isClassicalKey = "RSA".equals(wrappingKeyAlg)
+                    || "DSA".equals(wrappingKeyAlg) || "EC".equals(wrappingKeyAlg);
+                boolean emitKeyInfo = hasCerts || hasCustomRef || isClassicalKey;
+
+                if (emitKeyInfo) {
+                    createStartElementAndOutputAsEvent(subOutputProcessorChain, WSSConstants.TAG_dsig_KeyInfo, true, null);
+                }
                 createSecurityTokenReferenceStructureForEncryptedKey(
                         subOutputProcessorChain, securityToken,
                         ((WSSSecurityProperties) getSecurityProperties()).getEncryptionKeyIdentifier(),
                         getSecurityProperties().isUseSingleCert()
                 );
-                createEndElementAndOutputAsEvent(subOutputProcessorChain, WSSConstants.TAG_dsig_KeyInfo);
+                if (emitKeyInfo) {
+                    createEndElementAndOutputAsEvent(subOutputProcessorChain, WSSConstants.TAG_dsig_KeyInfo);
+                }
                 createStartElementAndOutputAsEvent(subOutputProcessorChain, WSSConstants.TAG_xenc_CipherData, false, null);
                 createStartElementAndOutputAsEvent(subOutputProcessorChain, WSSConstants.TAG_xenc_CipherValue, false, null);
 
@@ -365,8 +380,13 @@ public class EncryptedKeyOutputProcessor extends AbstractOutputProcessor {
             X509Certificate[] x509Certificates = securityToken.getKeyWrappingToken().getX509Certificates();
             if ((x509Certificates == null || x509Certificates.length == 0)
                 && securityToken.getKeyWrappingToken().getPublicKey() != null) {
-                WSSUtils.createKeyValueTokenStructure(this, outputProcessorChain,
-                                                      securityToken.getKeyWrappingToken().getPublicKey());
+                java.security.PublicKey wrappingPublicKey = securityToken.getKeyWrappingToken().getPublicKey();
+                String keyAlg = wrappingPublicKey.getAlgorithm();
+                // Only emit KeyValue for classical key types; PQC keys (e.g., ML-KEM) omit KeyInfo
+                // so that the receiver uses the directly configured decryption key
+                if ("RSA".equals(keyAlg) || "DSA".equals(keyAlg) || "EC".equals(keyAlg)) {
+                    WSSUtils.createKeyValueTokenStructure(this, outputProcessorChain, wrappingPublicKey);
+                }
                 return;
             }
 

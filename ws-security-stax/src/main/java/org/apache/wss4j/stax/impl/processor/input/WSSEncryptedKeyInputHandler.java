@@ -21,6 +21,7 @@ package org.apache.wss4j.stax.impl.processor.input;
 import org.apache.wss4j.binding.wss10.ObjectFactory;
 import org.apache.wss4j.binding.wss10.ReferenceType;
 import org.apache.wss4j.binding.wss10.SecurityTokenReferenceType;
+import org.apache.wss4j.common.WSS4JConstants;
 import org.apache.wss4j.common.bsp.BSPRule;
 import org.apache.wss4j.common.ext.WSSecurityException;
 import org.apache.wss4j.common.util.AttachmentUtils;
@@ -108,7 +109,10 @@ public class WSSEncryptedKeyInputHandler extends XMLEncryptedKeyInputHandler {
             String encryptionMethod = encryptionMethodType.getAlgorithm();
             if (!(WSSConstants.NS_XENC_RSA15.equals(encryptionMethod)
                 || WSSConstants.NS_XENC_RSAOAEPMGF1P.equals(encryptionMethod)
-                || WSSConstants.NS_XENC11_RSAOAEP.equals(encryptionMethod))) {
+                || WSSConstants.NS_XENC11_RSAOAEP.equals(encryptionMethod)
+                || WSS4JConstants.KEYTRANSPORT_ML_KEM_512.equals(encryptionMethod)
+                || WSS4JConstants.KEYTRANSPORT_ML_KEM_768.equals(encryptionMethod)
+                || WSS4JConstants.KEYTRANSPORT_ML_KEM_1024.equals(encryptionMethod))) {
                 securityContext.handleBSPRule(BSPRule.R5621);
             }
         }
