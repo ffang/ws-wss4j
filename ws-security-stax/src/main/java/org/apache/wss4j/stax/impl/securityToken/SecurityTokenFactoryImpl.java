@@ -33,6 +33,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+import javax.security.auth.Subject;
 import javax.security.auth.callback.CallbackHandler;
 import javax.security.auth.x500.X500Principal;
 
@@ -45,6 +46,7 @@ import org.apache.wss4j.stax.ext.WSInboundSecurityContext;
 import org.apache.wss4j.stax.ext.WSSConstants;
 import org.apache.wss4j.stax.ext.WSSSecurityProperties;
 import org.apache.wss4j.stax.securityToken.KerberosServiceSecurityToken;
+import org.apache.wss4j.stax.securityToken.KeyValueSecurityToken;
 import org.apache.wss4j.stax.securityToken.SamlSecurityToken;
 import org.apache.wss4j.stax.securityToken.SecurityTokenReference;
 import org.apache.wss4j.stax.securityToken.UsernameSecurityToken;
@@ -121,17 +123,10 @@ public class SecurityTokenFactoryImpl extends SecurityTokenFactory {
         // use the directly configured decryption key (e.g. ML-KEM private key via setDecryptionKey).
         Key decryptionKey = securityProperties.getDecryptionKey();
         if (decryptionKey instanceof PrivateKey) {
-            final PrivateKey privateKey = (PrivateKey) decryptionKey;
-            AbstractInboundSecurityToken token = new AbstractInboundSecurityToken(
+            PQCKeyValueToken token = new PQCKeyValueToken(
                     (InboundSecurityContext) inboundSecurityContext,
-                    IDGenerator.generateID(null),
-                    SecurityTokenConstants.KeyIdentifier_NoKeyInfo, true) {
-                @Override
-                public SecurityTokenConstants.TokenType getTokenType() {
-                    return SecurityTokenConstants.KeyValueToken;
-                }
-            };
-            token.setSecretKey("", privateKey);
+                    IDGenerator.generateID(null));
+            token.setSecretKey("", (PrivateKey) decryptionKey);
             return token;
         }
 
@@ -511,17 +506,10 @@ public class SecurityTokenFactoryImpl extends SecurityTokenFactory {
         // use a directly configured decryption key (e.g. ML-KEM private key set via setDecryptionKey).
         Key decryptionKey = securityProperties.getDecryptionKey();
         if (decryptionKey instanceof PrivateKey) {
-            final PrivateKey privateKey = (PrivateKey) decryptionKey;
-            AbstractInboundSecurityToken token = new AbstractInboundSecurityToken(
+            PQCKeyValueToken token = new PQCKeyValueToken(
                     (InboundSecurityContext) securityContext,
-                    IDGenerator.generateID(null),
-                    SecurityTokenConstants.KeyIdentifier_NoKeyInfo, true) {
-                @Override
-                public SecurityTokenConstants.TokenType getTokenType() {
-                    return SecurityTokenConstants.KeyValueToken;
-                }
-            };
-            token.setSecretKey("", privateKey);
+                    IDGenerator.generateID(null));
+            token.setSecretKey("", (PrivateKey) decryptionKey);
             return token;
         }
 
@@ -570,5 +558,33 @@ public class SecurityTokenFactoryImpl extends SecurityTokenFactory {
             getImplementedInterfaces(anInterface, interfaceList);
         }
         getImplementedInterfaces(clazz.getSuperclass(), interfaceList);
+    }
+
+    /**
+     * Minimal security token for PQC key transport (ML-KEM) where no KeyInfo element is emitted.
+     * Implements {@link KeyValueSecurityToken} so that CXF's StaxSecurityContextInInterceptor
+     * can safely cast the token when processing KeyValueToken security events.
+     */
+    private static final class PQCKeyValueToken extends AbstractInboundSecurityToken
+            implements KeyValueSecurityToken {
+
+        PQCKeyValueToken(InboundSecurityContext ctx, String id) {
+            super(ctx, id, SecurityTokenConstants.KeyIdentifier_NoKeyInfo, true);
+        }
+
+        @Override
+        public SecurityTokenConstants.TokenType getTokenType() {
+            return SecurityTokenConstants.KeyValueToken;
+        }
+
+        @Override
+        public Subject getSubject() throws WSSecurityException {
+            return null;
+        }
+
+        @Override
+        public Principal getPrincipal() throws WSSecurityException {
+            return null;
+        }
     }
 }
