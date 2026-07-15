@@ -317,24 +317,27 @@ public abstract class SPConstants {
 
     public static final String KW_RSA15 = "http://www.w3.org/2001/04/xmlenc#rsa-1_5";
 
-    // Provisional URIs for PQC algorithms (FIPS 203/204). No W3C standard yet.
+    // Provisional URIs for PQC algorithms (FIPS 203/204), per
+    // draft-eastlake-rfc9231bis-xmlsec-uris sections 3.3.15 (ML-DSA) and 3.6.9 (ML-KEM).
+    // These use the draft's "tbd" placeholder namespace and will need to be updated
+    // once final URIs are assigned (see SANTUARIO-634).
     public static final String ML_DSA_44 =
-            "http://www.w3.org/2021/04/xmldsig-more#ml-dsa-44";
+            "http://www.w3.org/tbd#ml-dsa-44";
 
     public static final String ML_DSA_65 =
-            "http://www.w3.org/2021/04/xmldsig-more#ml-dsa-65";
+            "http://www.w3.org/tbd#ml-dsa-65";
 
     public static final String ML_DSA_87 =
-            "http://www.w3.org/2021/04/xmldsig-more#ml-dsa-87";
+            "http://www.w3.org/tbd#ml-dsa-87";
 
     public static final String KW_ML_KEM_512 =
-            "http://www.w3.org/2021/04/xmldsig-more#ml-kem-512";
+            "http://www.w3.org/tbd#ml-kem-512";
 
     public static final String KW_ML_KEM_768 =
-            "http://www.w3.org/2021/04/xmldsig-more#ml-kem-768";
+            "http://www.w3.org/tbd#ml-kem-768";
 
     public static final String KW_ML_KEM_1024 =
-            "http://www.w3.org/2021/04/xmldsig-more#ml-kem-1024";
+            "http://www.w3.org/tbd#ml-kem-1024";
 
     public static final String P_SHA1 = "http://schemas.xmlsoap.org/ws/2005/02/sc/dk/p_sha1";
 

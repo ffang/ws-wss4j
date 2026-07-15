@@ -101,9 +101,9 @@ public class PQCEncryptionStaxTest extends AbstractTestBase {
 
     @ParameterizedTest
     @CsvSource({
-        "http://www.w3.org/2021/04/xmldsig-more#ml-kem-512,ML-KEM-512",
-        "http://www.w3.org/2021/04/xmldsig-more#ml-kem-768,ML-KEM-768",
-        "http://www.w3.org/2021/04/xmldsig-more#ml-kem-1024,ML-KEM-1024"
+        "http://www.w3.org/tbd#ml-kem-512,ML-KEM-512",
+        "http://www.w3.org/tbd#ml-kem-768,ML-KEM-768",
+        "http://www.w3.org/tbd#ml-kem-1024,ML-KEM-1024"
     })
     public void testMLKEMStaxEncryptStaxDecrypt(String keyTransportUri, String jcaAlgorithm) throws Exception {
         Assumptions.assumeTrue(mlKemAvailable, "ML-KEM requires BouncyCastle 1.84+");
