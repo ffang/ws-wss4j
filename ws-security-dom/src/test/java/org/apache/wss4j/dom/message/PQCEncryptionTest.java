@@ -25,11 +25,10 @@ import java.security.KeyPairGenerator;
 import java.security.KeyStore;
 import java.security.Security;
 import java.security.cert.X509Certificate;
-import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
-import java.util.Properties;
 
+import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
 import javax.security.auth.callback.CallbackHandler;
 
@@ -47,6 +46,7 @@ import org.apache.wss4j.dom.engine.WSSecurityEngineResult;
 import org.apache.wss4j.dom.handler.RequestData;
 import org.apache.wss4j.dom.handler.WSHandlerResult;
 import org.apache.wss4j.dom.util.WSSecurityUtil;
+import org.apache.xml.security.utils.EncryptionConstants;
 import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.cert.X509v3CertificateBuilder;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
@@ -60,15 +60,20 @@ import org.junit.jupiter.api.Test;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
- * Tests for ML-KEM (FIPS 203) key encapsulation in WS-Security EncryptedKey.
- * Requires BouncyCastle 1.81+ and JDK 17+.
+ * Tests for ML-KEM (FIPS 203) key transport in WS-Security EncryptedKey, using the W3C
+ * "XML Security: Generic Hybrid Cipher" key transport structure
+ * (https://www.w3.org/TR/xmlsec-generic-hybrid/, see SANTUARIO-633): the recipient's ML-KEM
+ * public key encapsulates a shared secret, an AES key-wrap key is derived from it with HKDF,
+ * and the (independently generated) content-encryption key is AES-KeyWrap'd with that derived
+ * key - not the raw KEM shared secret used directly as the CEK.
+ *
+ * <p>Requires BouncyCastle 1.81+, JDK 21+ (javax.crypto.KEM, used internally by Santuario's
+ * {@code KeyUtils.kemEncapsulate}/{@code kemDecapsulate}).
  */
 public class PQCEncryptionTest {
 
@@ -104,9 +109,16 @@ public class PQCEncryptionTest {
         Security.removeProvider(BouncyCastleProvider.PROVIDER_NAME);
     }
 
+    private static SecretKey generateCek() throws Exception {
+        KeyGenerator keyGen = KeyGenerator.getInstance("AES");
+        keyGen.init(256);
+        return keyGen.generateKey();
+    }
+
     /**
-     * Round-trip test: ML-KEM-768 encapsulation → EncryptedKey XML → decapsulation.
-     * Verifies that the shared secret is recovered correctly without losing bytes.
+     * Round-trip test: real CEK -&gt; ML-KEM-768 Generic Hybrid Cipher key transport -&gt;
+     * EncryptedKey XML -&gt; decapsulation/unwrap. Verifies that the CEK is recovered
+     * correctly without losing bytes.
      */
     @Test
     public void testMLKEM768EncapsulationRoundTrip() throws Exception {
@@ -121,14 +133,8 @@ public class PQCEncryptionTest {
         encKeyBuilder.setKeyEncAlgo(WSS4JConstants.KEYTRANSPORT_ML_KEM_768);
         encKeyBuilder.setUserInfo(ML_KEM_ALIAS);
 
-        encKeyBuilder.prepare(mlKemCrypto, null);
-
-        SecretKey derivedKey = encKeyBuilder.getKemDerivedKey();
-        assertNotNull(derivedKey, "ML-KEM prepare() must set kemDerivedKey");
-        assertEquals("AES", derivedKey.getAlgorithm());
-        assertEquals(32, derivedKey.getEncoded().length);
-
-        LOG.debug("Derived CEK (sender): {}", Arrays.toString(derivedKey.getEncoded()));
+        SecretKey cek = generateCek();
+        encKeyBuilder.prepare(mlKemCrypto, cek);
 
         // Append EncryptedKey to the security header so it's part of the document.
         WSSecurityUtil.prependChildElement(
@@ -136,8 +142,13 @@ public class PQCEncryptionTest {
 
         String xml = XMLUtils.prettyDocumentToString(doc);
         LOG.debug("EncryptedKey document:\n{}", xml);
+        assertTrue(xml.contains(EncryptionConstants.ALGO_ID_KEYTRANSPORT_GENERIC_HYBRID),
+            "EncryptedKey must carry the Generic Hybrid Cipher Algorithm attribute");
+        assertTrue(xml.contains("GenericHybridCipherMethod"), "Missing GenericHybridCipherMethod element");
+        assertTrue(xml.contains("KeyEncapsulationMethod"), "Missing KeyEncapsulationMethod element");
         assertTrue(xml.contains(WSS4JConstants.KEYTRANSPORT_ML_KEM_768),
-            "EncryptedKey must carry the ML-KEM-768 Algorithm attribute");
+            "KeyEncapsulationMethod must carry the ML-KEM-768 Algorithm attribute");
+        assertTrue(xml.contains("DataEncapsulationMethod"), "Missing DataEncapsulationMethod element");
 
         // Decrypt via WSSecurityEngine
         RequestData data = new RequestData();
@@ -155,8 +166,8 @@ public class PQCEncryptionTest {
 
         byte[] recoveredKey = (byte[]) encResult.get(WSSecurityEngineResult.TAG_SECRET);
         assertNotNull(recoveredKey, "Recovered key bytes must not be null");
-        assertArrayEquals(derivedKey.getEncoded(), recoveredKey,
-            "Decapsulated key must match the encapsulated derived key");
+        org.junit.jupiter.api.Assertions.assertArrayEquals(cek.getEncoded(), recoveredKey,
+            "Unwrapped key must match the original CEK");
     }
 
     /**
@@ -171,17 +182,15 @@ public class PQCEncryptionTest {
         WSSecHeader secHeader = new WSSecHeader(doc);
         secHeader.insertSecurityHeader();
 
-        // Step 1: ML-KEM encapsulation → get derived CEK
+        // Step 1: real CEK, ML-KEM key transport
         WSSecEncryptedKey encKeyBuilder = new WSSecEncryptedKey(secHeader);
         encKeyBuilder.setKeyIdentifierType(WSConstants.ISSUER_SERIAL);
         encKeyBuilder.setKeyEncAlgo(WSS4JConstants.KEYTRANSPORT_ML_KEM_768);
         encKeyBuilder.setUserInfo(ML_KEM_ALIAS);
-        encKeyBuilder.prepare(mlKemCrypto, null);
+        SecretKey cek = generateCek();
+        encKeyBuilder.prepare(mlKemCrypto, cek);
 
-        SecretKey cek = encKeyBuilder.getKemDerivedKey();
-        assertNotNull(cek);
-
-        // Step 2: encrypt SOAP body with the derived CEK using AES-256-GCM
+        // Step 2: encrypt SOAP body with the same CEK using AES-256-GCM
         WSSecEncrypt encBuilder = new WSSecEncrypt(secHeader);
         encBuilder.setSymmetricEncAlgorithm(WSConstants.AES_256_GCM);
         encBuilder.setEncryptSymmKey(false);
@@ -194,6 +203,7 @@ public class PQCEncryptionTest {
 
         String xml = XMLUtils.prettyDocumentToString(encryptedDoc);
         LOG.debug("Full encrypted message:\n{}", xml);
+        assertTrue(xml.contains(EncryptionConstants.ALGO_ID_KEYTRANSPORT_GENERIC_HYBRID));
         assertTrue(xml.contains(WSS4JConstants.KEYTRANSPORT_ML_KEM_768));
         assertTrue(xml.contains(WSConstants.AES_256_GCM));
         assertTrue(!xml.contains("counter_port_type"), "Body must be encrypted");
@@ -229,10 +239,9 @@ public class PQCEncryptionTest {
 
     /**
      * Tests that {@link WSSecEncrypt#build} with ML-KEM key transport (single-call API)
-     * correctly encrypts and decrypts the SOAP body.
-     *
-     * <p>Prior to the fix, {@code build()} would encrypt the body with a throwaway random
-     * symmetric key rather than the KEM-derived shared secret, causing decryption to fail.
+     * correctly encrypts and decrypts the SOAP body, using the caller-supplied CEK for both
+     * content encryption and key transport (there is no more KEM-derived-key substitution -
+     * the KEM shared secret only ever derives the AES key-wrap key, never the CEK itself).
      */
     @Test
     public void testMLKEM768SingleCallBuildEncryptDecrypt() throws Exception {
@@ -249,14 +258,9 @@ public class PQCEncryptionTest {
         wsEncrypt.setKeyIdentifierType(WSConstants.ISSUER_SERIAL);
         wsEncrypt.setUserInfo(ML_KEM_ALIAS);
 
-        // Generate a random AES key that would have been the wrong key before the fix.
-        javax.crypto.KeyGenerator keyGen =
-            javax.crypto.KeyGenerator.getInstance("AES");
-        keyGen.init(256);
-        SecretKey placeholderKey = keyGen.generateKey();
+        SecretKey cek = generateCek();
 
-        // build() must detect the ML-KEM path and use kemDerivedKey, not placeholderKey.
-        Document encryptedDoc = wsEncrypt.build(mlKemCrypto, placeholderKey);
+        Document encryptedDoc = wsEncrypt.build(mlKemCrypto, cek);
 
         String xml = XMLUtils.prettyDocumentToString(encryptedDoc);
         assertTrue(xml.contains(WSS4JConstants.KEYTRANSPORT_ML_KEM_768),
@@ -293,7 +297,8 @@ public class PQCEncryptionTest {
     }
 
     /**
-     * Verify that the BSP whitelist accepts ML-KEM URIs without throwing.
+     * Verify that the BSP whitelist accepts the Generic Hybrid Cipher (ML-KEM) top-level
+     * algorithm without throwing.
      */
     @Test
     public void testMLKEM512BSPWhitelist() throws Exception {
@@ -312,9 +317,7 @@ public class PQCEncryptionTest {
         builder.setKeyIdentifierType(WSConstants.ISSUER_SERIAL);
         builder.setKeyEncAlgo(WSS4JConstants.KEYTRANSPORT_ML_KEM_512);
         builder.setUserInfo(ML_KEM_ALIAS);
-        builder.prepare(crypto512, null);
-
-        assertNotNull(builder.getKemDerivedKey());
+        builder.prepare(crypto512, generateCek());
 
         // Append EncryptedKey to the security header.
         WSSecurityUtil.prependChildElement(

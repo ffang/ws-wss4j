@@ -54,13 +54,11 @@ import javax.xml.stream.XMLStreamWriter;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
- * StAX-path tests for ML-KEM (FIPS 203) key transport in WS-Security SOAP messages.
- *
- * Outbound: uses Cipher.WRAP_MODE (BC compound format: KEM ciphertext || AES-wrapped CEK).
- * Inbound:  uses Cipher.UNWRAP_MODE with the configured ML-KEM private key.
- *
- * Note: wss4j DOM and wss4j StAX use different wire formats for ML-KEM (KEMGenerateSpec/
- * KEMExtractSpec vs Cipher.WRAP/UNWRAP_MODE), so StAX↔DOM interop is not supported.
+ * StAX-path tests for ML-KEM (FIPS 203) key transport in WS-Security SOAP messages, using the
+ * W3C "XML Security: Generic Hybrid Cipher" key transport structure
+ * (https://www.w3.org/TR/xmlsec-generic-hybrid/, see SANTUARIO-633) - the same wire format now
+ * produced by the DOM path ({@link PQCEncryptionTest}), so StAX and DOM ML-KEM output are
+ * interoperable.
  */
 public class PQCEncryptionStaxTest extends AbstractTestBase {
 
@@ -101,12 +99,12 @@ public class PQCEncryptionStaxTest extends AbstractTestBase {
 
     @ParameterizedTest
     @CsvSource({
-        "http://www.w3.org/tbd#ml-kem-512,ML-KEM-512",
-        "http://www.w3.org/tbd#ml-kem-768,ML-KEM-768",
-        "http://www.w3.org/tbd#ml-kem-1024,ML-KEM-1024"
+        WSS4JConstants.KEYTRANSPORT_ML_KEM_512  + ",ML-KEM-512",
+        WSS4JConstants.KEYTRANSPORT_ML_KEM_768  + ",ML-KEM-768",
+        WSS4JConstants.KEYTRANSPORT_ML_KEM_1024 + ",ML-KEM-1024"
     })
     public void testMLKEMStaxEncryptStaxDecrypt(String keyTransportUri, String jcaAlgorithm) throws Exception {
-        Assumptions.assumeTrue(mlKemAvailable, "ML-KEM requires BouncyCastle 1.84+");
+        Assumptions.assumeTrue(mlKemAvailable, "ML-KEM requires BouncyCastle 1.84+ and Java 21+ (javax.crypto.KEM)");
 
         KeyPair kp = keyPairs.get(jcaAlgorithm);
 
@@ -125,6 +123,19 @@ public class PQCEncryptionStaxTest extends AbstractTestBase {
                 this.getClass().getClassLoader().getResourceAsStream("testdata/plain-soap-1.1.xml");
             baos = doOutboundSecurity(securityProperties, sourceDocument);
         }
+
+        // Verify the serialised XML carries the spec's element names, per
+        // https://www.w3.org/TR/xmlsec-generic-hybrid/ section 6.1 "Key Transport Example"
+        String serialized = new String(baos.toByteArray(), java.nio.charset.StandardCharsets.UTF_8);
+        org.junit.jupiter.api.Assertions.assertTrue(
+            serialized.contains("GenericHybridCipherMethod"), "Missing GenericHybridCipherMethod element");
+        org.junit.jupiter.api.Assertions.assertTrue(
+            serialized.contains("KeyEncapsulationMethod"), "Missing KeyEncapsulationMethod element");
+        org.junit.jupiter.api.Assertions.assertTrue(
+            serialized.contains("DataEncapsulationMethod"), "Missing DataEncapsulationMethod element");
+        org.junit.jupiter.api.Assertions.assertTrue(
+            serialized.contains("http://www.w3.org/2010/xmlsec-ghc#generic-hybrid"),
+            "Missing Generic Hybrid Cipher EncryptionMethod algorithm");
 
         // Verify encrypted output has EncryptedKey + EncryptedData
         Document encryptedDoc = documentBuilderFactory.newDocumentBuilder()

@@ -35,13 +35,14 @@ import javax.crypto.spec.OAEPParameterSpec;
 
 import org.apache.wss4j.common.WSS4JConstants;
 import org.apache.wss4j.common.token.DOMX509SKI;
-import org.apache.wss4j.dom.message.WSSecEncryptedKey;
 import org.apache.xml.security.encryption.AgreementMethod;
 import org.apache.xml.security.encryption.KeyDerivationMethod;
 import org.apache.xml.security.encryption.XMLCipherUtil;
 import org.apache.xml.security.encryption.keys.RecipientKeyInfo;
 import org.apache.xml.security.encryption.keys.content.AgreementMethodImpl;
+import org.apache.xml.security.encryption.keys.content.derivedKey.KeyDerivationMethodImpl;
 import org.apache.xml.security.encryption.params.KeyAgreementParameters;
+import org.apache.xml.security.encryption.params.KeyDerivationParameters;
 import org.apache.xml.security.exceptions.XMLSecurityException;
 import org.apache.xml.security.keys.content.keyvalues.DSAKeyValue;
 import org.apache.xml.security.keys.content.keyvalues.ECKeyValue;
@@ -363,10 +364,8 @@ public class EncryptedKeyProcessor implements Processor {
         Element encryptedKeyElement,
         PrivateKey privateKey
     ) throws WSSecurityException {
-        if (WSS4JConstants.KEYTRANSPORT_ML_KEM_512.equals(encryptedKeyTransportMethod)
-                || WSS4JConstants.KEYTRANSPORT_ML_KEM_768.equals(encryptedKeyTransportMethod)
-                || WSS4JConstants.KEYTRANSPORT_ML_KEM_1024.equals(encryptedKeyTransportMethod)) {
-            return decapsulateMLKEM(encryptedKeyTransportMethod, privateKey, encryptedEphemeralKey);
+        if (EncryptionConstants.ALGO_ID_KEYTRANSPORT_GENERIC_HYBRID.equals(encryptedKeyTransportMethod)) {
+            return decapsulateGenericHybrid(encryptedKeyElement, privateKey, encryptedEphemeralKey);
         }
         if (data.getDecCrypto() == null) {
             throw new WSSecurityException(WSSecurityException.ErrorCode.FAILURE, "noDecCryptoFile");
@@ -448,20 +447,52 @@ public class EncryptedKeyProcessor implements Processor {
     }
 
     /**
-     * Performs ML-KEM (FIPS 203) decapsulation using BouncyCastle's KEMExtractSpec.
-     * The encapsulationBytes from the CipherValue are the KEM ciphertext; the
-     * returned shared secret is used directly as the symmetric CEK.
+     * Performs ML-KEM (FIPS 203) key transport decryption using the W3C "XML Security:
+     * Generic Hybrid Cipher" structure (https://www.w3.org/TR/xmlsec-generic-hybrid/, see
+     * SANTUARIO-633): parses the KEM algorithm, key-derivation method, and data-encapsulation
+     * (AES-KeyWrap) algorithm out of the nested {@code ghc:GenericHybridCipherMethod}
+     * structure, splits the leading KEM encapsulation off {@code combinedCiphertext},
+     * decapsulates it to derive the wrap key, and AES-Unwraps the remaining bytes to recover
+     * the real CEK.
      */
-    private static byte[] decapsulateMLKEM(String encAlgo, PrivateKey privateKey,
-                                            byte[] encapsulationBytes)
+    private static byte[] decapsulateGenericHybrid(Element encryptedKeyElement, PrivateKey privateKey,
+                                                    byte[] combinedCiphertext)
             throws WSSecurityException {
         try {
-            String jcaName = WSSecEncryptedKey.mlKemJcaName(encAlgo);
-            javax.crypto.KeyGenerator kg = javax.crypto.KeyGenerator.getInstance(jcaName, "BC");
-            kg.init(new org.bouncycastle.jcajce.spec.KEMExtractSpec(
-                    privateKey, encapsulationBytes, "AES"), null);
-            javax.crypto.SecretKey sharedSecret = kg.generateKey();
-            return sharedSecret.getEncoded();
+            Element encryptionMethodElement = (Element) encryptedKeyElement
+                    .getElementsByTagNameNS(WSConstants.ENC_NS, "EncryptionMethod").item(0);
+            Element genericHybridCipherMethodElement = (Element) encryptionMethodElement
+                    .getElementsByTagNameNS(EncryptionConstants.EncryptionSpecGHCNS,
+                            EncryptionConstants._TAG_GENERICHYBRIDCIPHERMETHOD).item(0);
+            Element keyEncapsulationMethodElement = (Element) genericHybridCipherMethodElement
+                    .getElementsByTagNameNS(EncryptionConstants.EncryptionSpecGHCNS,
+                            EncryptionConstants._TAG_KEYENCAPSULATIONMETHOD).item(0);
+            Element dataEncapsulationMethodElement = (Element) genericHybridCipherMethodElement
+                    .getElementsByTagNameNS(EncryptionConstants.EncryptionSpecGHCNS,
+                            EncryptionConstants._TAG_DATAENCAPSULATIONMETHOD).item(0);
+
+            String kemAlgo = keyEncapsulationMethodElement.getAttributeNS(null, "Algorithm");
+            String dataEncapsulationAlgo = dataEncapsulationMethodElement.getAttributeNS(null, "Algorithm");
+
+            Element keyDerivationMethodElement = (Element) keyEncapsulationMethodElement
+                    .getElementsByTagNameNS(EncryptionConstants.EncryptionSpec11NS,
+                            EncryptionConstants._TAG_KEYDERIVATIONMETHOD).item(0);
+
+            int keyBitLength = org.apache.xml.security.utils.KeyUtils.getAESKeyBitSizeForWrapAlgorithm(dataEncapsulationAlgo);
+            KeyDerivationMethodImpl keyDerivationMethod = new KeyDerivationMethodImpl(keyDerivationMethodElement, null);
+            KeyDerivationParameters kdfParams =
+                    XMLCipherUtil.constructKeyDerivationParameter(keyDerivationMethod, keyBitLength);
+
+            org.apache.xml.security.utils.KeyUtils.KemDecapsulation kemResult =
+                    org.apache.xml.security.utils.KeyUtils.kemDecapsulate(
+                            privateKey, kemAlgo, combinedCiphertext, kdfParams);
+
+            Cipher cipher = KeyUtils.getCipherInstance(dataEncapsulationAlgo);
+            cipher.init(Cipher.UNWRAP_MODE, kemResult.getWrapKey());
+            String keyAlgorithm = JCEMapper.translateURItoJCEID(dataEncapsulationAlgo);
+            return cipher.unwrap(kemResult.getWrappedKey(), keyAlgorithm, Cipher.SECRET_KEY).getEncoded();
+        } catch (WSSecurityException e) {
+            throw e;
         } catch (Exception e) {
             throw new WSSecurityException(WSSecurityException.ErrorCode.FAILED_CHECK, e);
         }
@@ -837,13 +868,11 @@ public class EncryptedKeyProcessor implements Processor {
                 bspEnforcer.handleBSPRule(BSPRule.R5625);
             }
         } else {
-            // EncryptionAlgorithm must be RSA15, RSAOAEP, or ML-KEM (BSP R5621).
+            // EncryptionAlgorithm must be RSA15, RSAOAEP, or Generic Hybrid Cipher (ML-KEM) (BSP R5621).
             if (!(WSConstants.KEYTRANSPORT_RSA15.equals(encAlgo)
                     || WSConstants.KEYTRANSPORT_RSAOAEP.equals(encAlgo)
                     || WSConstants.KEYTRANSPORT_RSAOAEP_XENC11.equals(encAlgo)
-                    || WSS4JConstants.KEYTRANSPORT_ML_KEM_512.equals(encAlgo)
-                    || WSS4JConstants.KEYTRANSPORT_ML_KEM_768.equals(encAlgo)
-                    || WSS4JConstants.KEYTRANSPORT_ML_KEM_1024.equals(encAlgo))) {
+                    || EncryptionConstants.ALGO_ID_KEYTRANSPORT_GENERIC_HYBRID.equals(encAlgo))) {
                 bspEnforcer.handleBSPRule(BSPRule.R5621);
             }
         }

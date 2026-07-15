@@ -146,12 +146,6 @@ public class WSSecEncryptedKey extends WSSecBase {
 
     private String encryptedKeySHA1;
 
-    /**
-     * Symmetric key derived from an ML-KEM encapsulation. Non-null only when
-     * keyEncAlgo is one of the KEYTRANSPORT_ML_KEM_* URIs.
-     */
-    private SecretKey kemDerivedKey;
-
     public WSSecEncryptedKey(WSSecHeader securityHeader) {
         super(securityHeader);
     }
@@ -204,7 +198,7 @@ public class WSSecEncryptedKey extends WSSecBase {
 
         if (useThisPublicKey != null) {
             if (isMLKem(keyEncAlgo)) {
-                buildMLKEMEncapsulation(useThisPublicKey, null, null);
+                buildMLKEMEncapsulation(useThisPublicKey, null, null, symmetricKey);
                 return;
             }
             createEncryptedKeyElement(useThisPublicKey);
@@ -236,7 +230,7 @@ public class WSSecEncryptedKey extends WSSecBase {
             }
 
             if (isMLKem(keyEncAlgo)) {
-                buildMLKEMEncapsulation(remoteCert.getPublicKey(), remoteCert, crypto);
+                buildMLKEMEncapsulation(remoteCert.getPublicKey(), remoteCert, crypto, symmetricKey);
                 return;
             }
 
@@ -254,14 +248,6 @@ public class WSSecEncryptedKey extends WSSecBase {
             byte[] encryptedEphemeralKey = encryptSymmetricKey(kek, symmetricKey);
             addCipherValueElement(encryptedEphemeralKey);
         }
-    }
-
-    /**
-     * Returns the symmetric key derived from ML-KEM encapsulation, or {@code null}
-     * when a classical key-transport algorithm was used.
-     */
-    public SecretKey getKemDerivedKey() {
-        return kemDerivedKey;
     }
 
     /**
@@ -423,58 +409,114 @@ public class WSSecEncryptedKey extends WSSecBase {
     }
 
     /**
-     * Maps a KEYTRANSPORT_ML_KEM_* URI to the JCA algorithm name understood by BC.
-     */
-    public static String mlKemJcaName(String uri) {
-        if (WSS4JConstants.KEYTRANSPORT_ML_KEM_512.equals(uri)) {
-            return "ML-KEM-512";
-        }
-        if (WSS4JConstants.KEYTRANSPORT_ML_KEM_768.equals(uri)) {
-            return "ML-KEM-768";
-        }
-        if (WSS4JConstants.KEYTRANSPORT_ML_KEM_1024.equals(uri)) {
-            return "ML-KEM-1024";
-        }
-        throw new IllegalArgumentException("Unknown ML-KEM URI: " + uri);
-    }
-
-    /**
-     * Performs ML-KEM (FIPS 203) encapsulation using BouncyCastle's KEMGenerateSpec.
-     * The BC generator returns both the KEM ciphertext (→ CipherValue) and the
-     * shared secret (→ stored in {@link #kemDerivedKey}). The shared secret is
-     * the symmetric CEK; no separate key-wrap step is needed.
+     * Performs ML-KEM (FIPS 203) key transport using the W3C "XML Security: Generic
+     * Hybrid Cipher" structure (https://www.w3.org/TR/xmlsec-generic-hybrid/, see
+     * SANTUARIO-633): encapsulates a shared secret to the recipient's ML-KEM public key,
+     * derives an AES key-wrap key from it via HKDF, and AES-KeyWraps the caller-supplied
+     * {@code symmetricKey} (the real CEK) with that derived key. {@code xenc:CipherValue}
+     * holds the concatenation of the KEM encapsulation and the wrapped CEK; the
+     * {@code xenc:EncryptionMethod} carries the {@code generic-hybrid} algorithm with a
+     * nested {@code ghc:GenericHybridCipherMethod} identifying the KEM/KDF/wrap algorithms.
      *
      * @param recipientPublicKey the recipient's ML-KEM public key
      * @param remoteCert recipient certificate used to build KeyInfo; may be null
      * @param crypto Crypto instance; used only when remoteCert is non-null
+     * @param symmetricKey the real content-encryption key to transport
      * @throws WSSecurityException if encapsulation fails
      */
     private void buildMLKEMEncapsulation(PublicKey recipientPublicKey,
-                                         X509Certificate remoteCert, Crypto crypto)
+                                         X509Certificate remoteCert, Crypto crypto,
+                                         SecretKey symmetricKey)
             throws WSSecurityException {
         try {
-            String jcaName = mlKemJcaName(keyEncAlgo);
-            javax.crypto.KeyGenerator kg = javax.crypto.KeyGenerator.getInstance(jcaName, "BC");
-            kg.init(new org.bouncycastle.jcajce.spec.KEMGenerateSpec(recipientPublicKey, "AES"),
-                    new java.security.SecureRandom());
-            // BC 1.84: generateKey() returns SecretKeyWithEncapsulation (not SecretWithEncapsulation).
-            // The shared secret is in getEncoded() and the KEM ciphertext in getEncapsulation().
-            org.bouncycastle.jcajce.SecretKeyWithEncapsulation swe =
-                    (org.bouncycastle.jcajce.SecretKeyWithEncapsulation) kg.generateKey();
+            String dataEncapsulationAlgo =
+                    KeyUtils.getAesKeyWrapAlgorithmForKeyLength(symmetricKey.getEncoded().length);
+            int keyBitLength = org.apache.xml.security.utils.KeyUtils.getAESKeyBitSizeForWrapAlgorithm(dataEncapsulationAlgo);
+            KeyDerivationParameters kdf = keyDerivationParameters;
+            if (kdf == null) {
+                kdf = buildDefaultKeyDerivationParameters(keyBitLength);
+            }
 
-            // All ML-KEM variants produce a 32-byte shared secret (256-bit AES key).
-            kemDerivedKey = new javax.crypto.spec.SecretKeySpec(
-                    swe.getEncoded(), 0, 32, "AES");
+            org.apache.xml.security.utils.KeyUtils.KemEncapsulation kemResult =
+                    org.apache.xml.security.utils.KeyUtils.kemEncapsulate(recipientPublicKey, keyEncAlgo, kdf);
+
+            Cipher wrapCipher = KeyUtils.getCipherInstance(dataEncapsulationAlgo);
+            wrapCipher.init(Cipher.WRAP_MODE, kemResult.getWrapKey());
+            byte[] wrappedKey = wrapCipher.wrap(symmetricKey);
+
+            byte[] encapsulation = kemResult.getEncapsulation();
+            byte[] combined = new byte[encapsulation.length + wrappedKey.length];
+            System.arraycopy(encapsulation, 0, combined, 0, encapsulation.length);
+            System.arraycopy(wrappedKey, 0, combined, encapsulation.length, wrappedKey.length);
 
             if (remoteCert != null) {
                 createEncryptedKeyElement(remoteCert, crypto, null);
             } else if (useThisPublicKey != null) {
                 createEncryptedKeyElement(useThisPublicKey);
             }
-            addCipherValueElement(swe.getEncapsulation());
+            upgradeToGenericHybridStructure(keyEncAlgo, kdf, keyBitLength / 8, dataEncapsulationAlgo);
+            addCipherValueElement(combined);
+        } catch (WSSecurityException e) {
+            throw e;
         } catch (Exception e) {
             throw new WSSecurityException(WSSecurityException.ErrorCode.FAILED_ENCRYPTION, e);
         }
+    }
+
+    /**
+     * Rewrites the {@code xenc:EncryptionMethod} child of {@link #encryptedKeyElement}
+     * (already built by {@code createEncryptedKeyElement} with the flat ML-KEM URI as its
+     * {@code Algorithm}) into the Generic Hybrid Cipher structure: the top-level algorithm
+     * becomes {@code generic-hybrid}, and a nested {@code ghc:GenericHybridCipherMethod} is
+     * appended identifying the KEM algorithm/KDF and the data-encapsulation (AES-KeyWrap)
+     * algorithm - mirroring the structure Santuario's own {@code XMLCipher} now builds.
+     */
+    private void upgradeToGenericHybridStructure(String kemAlgo, KeyDerivationParameters kdf,
+                                                  int keyLenBytes, String dataEncapsulationAlgo)
+            throws WSSecurityException {
+        Element encryptionMethodElement = (Element) encryptedKeyElement
+                .getElementsByTagNameNS(WSConstants.ENC_NS, "EncryptionMethod").item(0);
+        encryptionMethodElement.setAttributeNS(null, "Algorithm",
+                org.apache.xml.security.utils.EncryptionConstants.ALGO_ID_KEYTRANSPORT_GENERIC_HYBRID);
+
+        Document doc = getDocument();
+        Element genericHybridCipherMethod = doc.createElementNS(
+                org.apache.xml.security.utils.EncryptionConstants.EncryptionSpecGHCNS,
+                "ghc:" + org.apache.xml.security.utils.EncryptionConstants._TAG_GENERICHYBRIDCIPHERMETHOD);
+        genericHybridCipherMethod.setAttributeNS(WSConstants.XMLNS_NS, "xmlns:ghc",
+                org.apache.xml.security.utils.EncryptionConstants.EncryptionSpecGHCNS);
+
+        Element keyEncapsulationMethod = doc.createElementNS(
+                org.apache.xml.security.utils.EncryptionConstants.EncryptionSpecGHCNS,
+                "ghc:" + org.apache.xml.security.utils.EncryptionConstants._TAG_KEYENCAPSULATIONMETHOD);
+        keyEncapsulationMethod.setAttributeNS(null, "Algorithm", kemAlgo);
+
+        try {
+            org.apache.xml.security.encryption.KeyDerivationMethod keyDerivationMethod =
+                    XMLCipherUtil.constructKeyDerivationMethod(doc, kdf);
+            if (keyDerivationMethod instanceof org.apache.xml.security.utils.ElementProxy) {
+                keyEncapsulationMethod.appendChild(
+                        ((org.apache.xml.security.utils.ElementProxy) keyDerivationMethod).getElement());
+            }
+        } catch (XMLEncryptionException e) {
+            throw new WSSecurityException(WSSecurityException.ErrorCode.FAILED_ENCRYPTION, e);
+        }
+
+        Element keyLen = doc.createElementNS(
+                org.apache.xml.security.utils.EncryptionConstants.EncryptionSpecGHCNS,
+                "ghc:" + org.apache.xml.security.utils.EncryptionConstants._TAG_KEYLEN);
+        keyLen.appendChild(doc.createTextNode(String.valueOf(keyLenBytes)));
+        keyEncapsulationMethod.appendChild(keyLen);
+
+        genericHybridCipherMethod.appendChild(keyEncapsulationMethod);
+
+        Element dataEncapsulationMethod = doc.createElementNS(
+                org.apache.xml.security.utils.EncryptionConstants.EncryptionSpecGHCNS,
+                "ghc:" + org.apache.xml.security.utils.EncryptionConstants._TAG_DATAENCAPSULATIONMETHOD);
+        dataEncapsulationMethod.setAttributeNS(null, "Algorithm", dataEncapsulationAlgo);
+        genericHybridCipherMethod.appendChild(dataEncapsulationMethod);
+
+        encryptionMethodElement.appendChild(genericHybridCipherMethod);
     }
 
     /**
